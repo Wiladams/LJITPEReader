@@ -4,10 +4,46 @@ local ffi = require "ffi"
 
 local pestructs = require("peluaclasses")
 
+--[[
+	
+	References
+
+	http://ivanlef0u.fr/repo/windoz/pe/CBM_1_2_2006_Goppit_PE_Format_Reverse_Engineer_View.pdf
+	http://msdn.microsoft.com/en-us/magazine/cc301808.aspx
+--]]
+
+
+--assuming machine is little endian
+local IMAGE_DOS_SIGNATURE     =            0x5A4D   -- MZ
+local IMAGE_OS2_SIGNATURE     =            0x454E   -- NE
+local IMAGE_OS2_SIGNATURE_LE  =            0x454C   -- LE
+local IMAGE_VXD_SIGNATURE     =            0x454C   -- LE
+local IMAGE_NT_SIGNATURE      =            0x4550  	-- PE00
+
+local IMAGE_NUMBEROF_DIRECTORY_ENTRIES    = 16
+
+local IMAGE_DIRECTORY_ENTRY_EXPORT          = 0   -- Export Directory
+local IMAGE_DIRECTORY_ENTRY_IMPORT          = 1   -- Import Directory
+local IMAGE_DIRECTORY_ENTRY_RESOURCE        = 2   -- Resource Directory
+local IMAGE_DIRECTORY_ENTRY_EXCEPTION       = 3   -- Exception Directory
+local IMAGE_DIRECTORY_ENTRY_SECURITY        = 4   -- Security Directory
+local IMAGE_DIRECTORY_ENTRY_BASERELOC       = 5   -- Base Relocation Table
+local IMAGE_DIRECTORY_ENTRY_DEBUG           = 6   -- Debug Directory
+--      IMAGE_DIRECTORY_ENTRY_COPYRIGHT       7   -- (X86 usage)
+local IMAGE_DIRECTORY_ENTRY_ARCHITECTURE    = 7   -- Architecture Specific Data
+local IMAGE_DIRECTORY_ENTRY_GLOBALPTR       = 8   -- RVA of GP
+local IMAGE_DIRECTORY_ENTRY_TLS             = 9   -- TLS Directory
+local IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG    = 10   -- Load Configuration Directory
+local IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT   = 11   -- Bound Import Directory in headers
+local IMAGE_DIRECTORY_ENTRY_IAT            = 12   -- Import Address Table
+local IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT   = 13   -- Delay Load Import Descriptors
+local IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR = 14   -- COM Runtime descriptor
+
+
 
 local function IsPEFormatImageFile(header)
 local sig = header:get_Signature()
-print(string.char(sig[0]), string.char(sig[1]), sig[2], sig[3])
+--print(string.char(sig[0]), string.char(sig[1]), sig[2], sig[3])
 	return sig[0] == string.byte('P') and
 		sig[1] == string.byte('E') and
 		sig[2] == 0 and
@@ -163,11 +199,67 @@ local function buildSectionHeaders(pefile)
 	return sections
 end
 
+local function copyFileToMemory(filename)
+	local f = assert(io.open(filename, "rb"), "unable to open file")
+	local str = f:read("*all")
+	local slen = #str;
+	f:close()
+
+	-- allocate a chunk of memory
+	--local arraystr = string.format("uint8_t[%d]", slen)
+	local array = ffi.new("uint8_t[?]", slen);
+	for offset=0, slen-1 do
+		array[offset] = string.byte(str:sub(offset+1,offset+1))
+	end
+
+
+	return array, slen
+end
+
+local function CreatePEReader(filename)
+	local buff, bufflen = copyFileToMemory(filename)
+
+	local res = {}
+	res.Buffer = buff
+	res.BufferLength = bufflen
+
+
+	local offset = 0
+	res.DOSHeader = IMAGE_DOS_HEADER(buff, bufflen, offset)
+	offset = offset + res.DOSHeader.ClassSize
+
+	local ntheadertype = MAGIC4(buff, bufflen, res.DOSHeader:get_e_lfanew())
+	print("Is PE Image File: ", IsPEFormatImageFile(ntheadertype))
+	offset = ntheadertype.Offset + ntheadertype.ClassSize
+
+	res.FileHeader = COFF(buff, bufflen, offset)
+	offset = offset + res.FileHeader.ClassSize
+
+	-- Read the 2 byte magic for the optional header
+	local pemagic = MAGIC2(buff, bufflen, offset)
+
+	local peheader=nil
+	if IsPe32Header(pemagic) then
+		res.PEHeader = PE32Header(buff, bufflen, offset)
+	elseif IsPe32PlusHeader(pemagic) then
+		res.PEHeader = PE32PlusHeader(buff, bufflen, offset)
+	end
+
+	offset = offset + res.PEHeader.ClassSize
+	res.Directories = buildDirectories(res.PEHeader)
+
+	-- Now offset should be positioned at the section table
+	res.Sections = buildSectionHeaders(res)
+
+	return res
+end
 
 local exports = {
 	buildDirectories = buildDirectories;
 	buildSectionHeaders = buildSectionHeaders;
 
+	CreatePEReader = CreatePEReader;
+	
 	GetEnclosingSectionHeader = GetEnclosingSectionHeader;
 	GetPtrFromRVA = GetPtrFromRVA;
 	

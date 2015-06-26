@@ -170,64 +170,12 @@ end
 
 
 
-local function copyFileToMemory(filename)
-	local f = assert(io.open(filename, "rb"), "unable to open file")
-	local str = f:read("*all")
-	local slen = string.len(str)
 
-	-- allocate a chunk of memory
-	local arraystr = string.format("uint8_t[%d]", slen)
-	local array = ffi.new(arraystr)
-	for offset=0, slen-1 do
-		array[offset] = string.byte(str:sub(offset+1,offset+1))
-	end
-
-	f:close()
-
-	return array, slen
-end
-
-local function CreatePEBrowser(filename)
-	local buff, bufflen = copyFileToMemory(filename)
-
-	local res = {}
-	res.Buffer = buff
-	res.BufferLength = bufflen
-
-
-	local offset = 0
-	res.DOSHeader = IMAGE_DOS_HEADER(buff, bufflen, offset)
-	offset = offset + res.DOSHeader.ClassSize
-
-	local ntheadertype = MAGIC4(buff, bufflen, res.DOSHeader:get_e_lfanew())
-	print("Is PE Image File: ", IsPEFormatImageFile(ntheadertype))
-	offset = ntheadertype.Offset + ntheadertype.ClassSize
-
-	res.FileHeader = COFF(buff, bufflen, offset)
-	offset = offset + res.FileHeader.ClassSize
-
-	-- Read the 2 byte magic for the optional header
-	local pemagic = MAGIC2(buff, bufflen, offset)
-
-	local peheader=nil
-	if IsPe32Header(pemagic) then
-		res.PEHeader = PE32Header(buff, bufflen, offset)
-	elseif IsPe32PlusHeader(pemagic) then
-		res.PEHeader = PE32PlusHeader(buff, bufflen, offset)
-	end
-
-	offset = offset + res.PEHeader.ClassSize
-	res.Directories = buildDirectories(res.PEHeader)
-
-	-- Now offset should be positioned at the section table
-	res.Sections = buildSectionHeaders(res)
-
-	return res
-end
 
 --local browser = CreatePEBrowser("HeadsUp.exe")
 --local browser = CreatePEBrowser("HexEdit.exe")
-local browser = CreatePEBrowser("c:/tools/openssl/openssl.exe")
+--local browser = PEReader.CreatePEReader("c:/tools/openssl/openssl.exe")
+local browser = PEReader.CreatePEReader(arg[1])
 
 printDOSInfo(browser.DOSHeader)
 printCOFF(browser.FileHeader)
