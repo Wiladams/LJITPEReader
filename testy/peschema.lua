@@ -1,7 +1,16 @@
+--[[
+	Schema for Windows Portable Executable file format
+	Revision 8.3 - February 6, 2013
 
--- DOS .EXE header
+	This file contains the schema lifted from the spec, and put into 
+	a form which is machine maleable.
+
+	A tool can be used to turn this schema into various forms which
+	will be appropriate for different programming environments.
+--]]
+
 local PETypes = {
-
+-- DOS .EXE header
 IMAGE_DOS_HEADER_Info = {
 	name = "IMAGE_DOS_HEADER";
 	fields = {
@@ -25,6 +34,21 @@ IMAGE_DOS_HEADER_Info = {
 		{name = "e_res2", basetype="uint16_t", repeating=10},        -- Reserved s
 		{name = "e_lfanew", basetype="uint32_t"},                    -- File address of new exe header
   }
+};
+
+MAGIC_Info = {
+	name = "MAGIC",
+	fields = {
+		{name = "Signature", basetype = "char", repeating = 2}
+	};
+
+	enums = {
+		OptHeaderMagic = {
+			{value = 0x10b, name = "IMAGE_MAGIC_HEADER_PE32", description = "PE32"},
+			{value = 0x20b, name = "IMAGE_MAGIC_HEADER_PE32_PLUS", description = "PE32+"},
+		};
+	}
+
 };
 
 MAGIC2_Info = {
@@ -56,26 +80,92 @@ COFF_Info = {
 
 	enums = {
 		MachineType = {
-			{value = 0x0, name = "IMAGE_FILE_MACHINE_UNKNOWN", description = "any"},
+			{value = 0x0000, name = "IMAGE_FILE_MACHINE_UNKNOWN", description = "any"},
+			{value = 0x01c0, name = "IMAGE_FILE_MACHINE_ARM", description = "ARM little endian"},
+			{value = 0x01c4, name = "IMAGE_FILE_MACHINE_ARMN", description = "ARMv7 (or higher) Thumb mode only"},
+			{value = 0x01d3, name = "IMAGE_FILE_MACHINE_AM33", description = "Matsushita AM33"},
+			{value = 0x014c, name = "IMAGE_FILE_MACHINE_I386", description = "Intel 386 or later processors and compatible processors"},
+			{value = 0x0166, name = "IMAGE_FILE_MACHINE_R4000", description = "MIPS little endian"},
+			{value = 0x0169, name = "IMAGE_FILE_MACHINE_WCEMIPSV2", description = "MIPS little-endian WCE v2"},
+			{value = 0x01a2, name = "IMAGE_FILE_MACHINE_SH3", description = "Hitachi SH3"},
+			{value = 0x01a3, name = "IMAGE_FILE_MACHINE_SH3D", description = "Hitachi SH3 DSP"},
+			{value = 0x01a6, name = "IMAGE_FILE_MACHINE_SH4", description = "Hitachi SH4"},
+			{value = 0x01a8, name = "IMAGE_FILE_MACHINE_SH5", description = "Hitachi SH5"},
+			{value = 0x01c2, name = "IMAGE_FILE_MACHINE_THUMB", description = "ARM or Thumb ('interworking')"},
+			{value = 0x01f0, name = "IMAGE_FILE_MACHINE_POWERPC", description = "Power PC little endian"},
+			{value = 0x01f1, name = "IMAGE_FILE_MACHINE_POWERPCFP", description = "Power PC with floating point support"},
+			{value = 0x0200, name = "IMAGE_FILE_MACHINE_IA64", description = "Intel Itanium processor family"},
+			{value = 0x0266, name = "IMAGE_FILE_MACHINE_MIPS1", description = "MIPS16"},
+			{value = 0x0366, name = "IMAGE_FILE_MACHINE_MIPSF", description = "MIPS with FPU"},
+			{value = 0x0466, name = "IMAGE_FILE_MACHINE_MIPSF", description = "MIPS16 with FPU"},
+			{value = 0x0ebc, name = "IMAGE_FILE_MACHINE_EBC", description = "EFI byte code"},
 			{value = 0x8664, name = "IMAGE_FILE_MACHINE_AMD64", description = "x64"},
-			{value = 0x1c0, name = "IMAGE_FILE_MACHINE_ARM", description = "ARM little endian"},
-			{value = 0x1c4, name = "IMAGE_FILE_MACHINE_ARMV7", description = "ARMv7 (or higher) Thumb mode only"},
-			{value = 0x14c, name = "IMAGE_FILE_MACHINE_I386", description = "Intel 386 or later processors and compatible processors"},
-			{value = 0x1c2, name = "IMAGE_FILE_MACHINE_THUMB", description = "ARM or Thumb (“interworking”)"},
+			{value = 0x9041, name = "IMAGE_FILE_MACHINE_M32R", description = "Mitsubishi M32R little endian"},
+			{value = 0xaa64, name = "IMAGE_FILE_MACHINE_ARM6", description = "ARMv8 in 64-bit mode"},
 		},
 
 		Characteristics = {
 			{value = 0x0001, name = "IMAGE_FILE_RELOCS_STRIPPED", description = "Image only, Windows CE, and Windows NT® and later. This indicates that the file does not contain base relocations and must therefore be loaded at its preferred base address. If the base address is not available, the loader reports an error. The default behavior of the linker is to strip base relocations from executable (EXE) files."},
 			{value = 0x0002, name = "IMAGE_FILE_EXECUTABLE_IMAGE", description = "Image only. This indicates that the image file is valid and can be run. If this flag is not set, it indicates a linker error."},
+			{value = 0x0004, name = "IMAGE_FILE_LINE_NUMS_STRIPPED", description = "COFF line numbers have been removed. This flag is deprecated and should be zero."},
+			{value = 0x0008, name = "IMAGE_FILE_LOCAL_SYMS_STRIPPED", description = "COFF symbol table entries for local symbols have been removed. This flag is deprecated and should be zero."},
+			{value = 0x0010, name = "IMAGE_FILE_AGGRESSIVE_WS_TRIM", description = "Obsolete. Aggressively trim working set. This flag is deprecated for Windows 2000 and later and must be zero."},
+			{value = 0x0020, name = "IMAGE_FILE_LARGE_ADDRESS_AWARE", description = "Application can handle > 2‑GB addresses."},
+			--{value = 0x0040, name = "IMAGE_FILE_RESERVED", description = "This flag is reserved for future use."},
+			{value = 0x0080, name = "IMAGE_FILE_BYTES_REVERSED_LO", description = "Little endian: the least significant bit (LSB) precedes the most significant bit (MSB) in memory. This flag is deprecated and should be zero."},
+			{value = 0x0100, name = "IMAGE_FILE_32BIT_MACHINE", description = "Machine is based on a 32-bit-word architecture."},
+			{value = 0x0200, name = "IMAGE_FILE_DEBUG_STRIPPED", description = "Debugging information is removed from the image file."},
+			{value = 0x0400, name = "IMAGE_FILE_REMOVABLE_RUN_ FROM_SWAP", description = "If the image is on removable media, fully load it and copy it to the swap file."},
+			{value = 0x0800, name = "IMAGE_FILE_NET_RUN_FROM_SWAP", description = "If the image is on network media, fully load it and copy it to the swap file."},
+			{value = 0x1000, name = "IMAGE_FILE_SYSTEM", description = "The image file is a system file, not a user program."},
+			{value = 0x2000, name = "IMAGE_FILE_DLL", description = "The image file is a dynamic-link library (DLL). Such files are considered executable files for almost all purposes, although they cannot be directly run."},
+			{value = 0x4000, name = "IMAGE_FILE_UP_SYSTEM_ONLY", description = "The file should be run only on a uniprocessor machine."},
+			{value = 0x8000, name = "IMAGE_FILE_BYTES_REVERSED_HI", description = "Big endian: the MSB precedes the LSB in memory. This flag is deprecated and should be zero."},
 		}
 	}
 };
 
+-- Enums related to various fields within the PE32 headers
+PEHeader = {
+	enums = {
+		Subsystem = {
+			{value = 0x0000, name = "IMAGE_SUBSYSTEM_UNKNOWN", description = "An unknown subsystem"},
+			{value = 0x0001, name = "IMAGE_SUBSYSTEM_NATIVE", description = "Device drivers and native Windows processes"},
+			{value = 0x0002, name = "IMAGE_SUBSYSTEM_WINDOWS_GUI", description = "The Windows graphical user interface (GUI) subsystem"},
+			{value = 0x0003, name = "IMAGE_SUBSYSTEM_WINDOWS_CUI", description = "The Windows character subsystem"},
+			{value = 0x0007, name = "IMAGE_SUBSYSTEM_POSIX_CUI", description = "The Posix character subsystem"},
+			{value = 0x0009, name = "IMAGE_SUBSYSTEM_WINDOWS_CE_GUI", description = "Windows CE"},
+			{value = 0x00010, name = "IMAGE_SUBSYSTEM_EFI_APPLICATION", description = "An Extensible Firmware Interface (EFI) application"},
+			{value = 0x00011, name = "IMAGE_SUBSYSTEM_EFI_BOOT_ SERVICE_DRIVER", description = "An EFI driver with boot services"},
+			{value = 0x00012, name = "IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER", description = "An EFI driver with run-time services"},
+			{value = 0x00013, name = "IMAGE_SUBSYSTEM_EFI_ROM", description = "An EFI ROM image"},
+			{value = 0x00014, name = "IMAGE_SUBSYSTEM_XBOX", description = "XBOX"},
 
+		};
+
+		DllCharacteristics = {
+			{value = 0x0001, name = "IMAGE_DLL_RESERVED1", description = "Reserved, must be zero."},
+			{value = 0x0002, name = "IMAGE_DLL_RESERVED2", description = "Reserved, must be zero."},
+			{value = 0x0004, name = "IMAGE_DLL_RESERVED3", description = "Reserved, must be zero."},
+			{value = 0x0008, name = "IMAGE_DLL_RESERVED4", description = "Reserved, must be zero."},
+			{value = 0x0040, name = "IMAGE_DLL_CHARACTERISTICS_DYNAMIC_BASE", description = "DLL can be relocated at load time."},
+			{value = 0x0080, name = "IMAGE_DLL_CHARACTERISTICS_FORCE_INTEGRITY", description = "Code Integrity checks are enforced."},
+			{value = 0x0100, name = "IMAGE_DLL_CHARACTERISTICS_NX_COMPAT", description = "Image is NX compatible."},
+			{value = 0x0200, name = "IMAGE_DLLCHARACTERISTICS_NO_ISOLATION", description = "Isolation aware, but do not isolate the image."},
+			{value = 0x0400, name = "IMAGE_DLLCHARACTERISTICS_NO_SEH", description = "Does not use structured exception (SE) handling. No SE handler may be called in this image."},
+			{value = 0x0800, name = "IMAGE_DLLCHARACTERISTICS_NO_BIND", description = "Do not bind the image."},
+			{value = 0x1000, name = "IMAGE_DLL_RESERVED5", description = "Reserved, must be zero."},
+			{value = 0x2000, name = "IMAGE_DLLCHARACTERISTICS_WDM_DRIVER", description = "A WDM driver."},
+			{value = 0x8000, name = "IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE", description = "Terminal Server aware."},
+
+		};
+	}		
+};
 
 PE32Header_Info = {
 	name = "PE32Header",
 	fields = {
+		-- Fields common to PE32 and PE+
 		{name = "Magic", basetype="uint16_t"},	-- , default = 0x10b
 		{name = "MajorLinkerVersion", basetype="uint8_t"},
 		{name = "MinorLinkerVersion", basetype="uint8_t"},
@@ -84,8 +174,12 @@ PE32Header_Info = {
 		{name = "SizeOfUninitializedData", basetype="uint32_t"},
 		{name = "AddressOfEntryPoint", basetype="uint32_t"},
 		{name = "BaseOfCode", basetype="uint32_t"},
+
+		-- PE32 has BaseOfData, which is not in the PE32+ header
 		{name = "BaseOfData", basetype="uint32_t"},
 
+		-- The next 21 fields are Windows specific extensions to 
+		-- the COFF format
 		{name = "ImageBase", basetype="uint32_t"},
 		{name = "SectionAlignment", basetype="uint32_t"},
 		{name = "FileAlignment", basetype="uint32_t"},
@@ -108,22 +202,23 @@ PE32Header_Info = {
 		{name = "LoaderFlags", basetype="uint32_t"},
 		{name = "NumberOfRvaAndSizes", basetype="uint32_t"},
 
-		{name = "ExportTable", basetype="uint8_t", repeating=8},
-		{name = "ImportTable", basetype="uint8_t", repeating=8},
-		{name = "ResourceTable", basetype="uint8_t", repeating=8},
-		{name = "ExceptionTable", basetype="uint8_t", repeating=8},
-		{name = "CertificateTable", basetype="uint8_t", repeating=8},
-		{name = "BaseRelocationTable", basetype="uint8_t", repeating=8},
-		{name = "Debug", basetype="uint8_t", repeating=8},
-		{name = "Architecture", basetype="uint8_t", repeating=8},
-		{name = "GlobalPtr", basetype="uint8_t", repeating=8},
-		{name = "TLSTable", basetype="uint8_t", repeating=8},
-		{name = "LoadConfigTable", basetype="uint8_t", repeating=8},
-		{name = "BoundImport", basetype="uint8_t", repeating=8},
-		{name = "IAT", basetype="uint8_t", repeating=8},
-		{name = "DelayImportDescriptor", basetype="uint8_t", repeating=8},
-		{name = "CLRRuntimeHeader", basetype="uint8_t", repeating=8},
-		{name = "Reserved", basetype="uint8_t", repeating=8},
+		-- Data directories
+		{name = "ExportTable", basetype="uint8_t", repeating=8},			-- .edata  exports
+		{name = "ImportTable", basetype="uint8_t", repeating=8},			-- .idata  imports
+		{name = "ResourceTable", basetype="uint8_t", repeating=8},			-- .rsrc   resource table
+		{name = "ExceptionTable", basetype="uint8_t", repeating=8},			-- .pdata  exceptions table
+		{name = "CertificateTable", basetype="uint8_t", repeating=8},		--         attribute certificate table
+		{name = "BaseRelocationTable", basetype="uint8_t", repeating=8},	-- .reloc  base relocation table
+		{name = "Debug", basetype="uint8_t", repeating=8},					-- .debug  debug data starting address
+		{name = "Architecture", basetype="uint8_t", repeating=8},			-- architecture, reserved
+		{name = "GlobalPtr", basetype="uint8_t", repeating=8},				-- global pointer
+		{name = "TLSTable", basetype="uint8_t", repeating=8},				-- .tls    Thread local storage
+		{name = "LoadConfigTable", basetype="uint8_t", repeating=8},		-- load configuration structure
+		{name = "BoundImport", basetype="uint8_t", repeating=8},			-- bound import table
+		{name = "IAT", basetype="uint8_t", repeating=8},					-- import address table
+		{name = "DelayImportDescriptor", basetype="uint8_t", repeating=8},	-- delay import descriptor
+		{name = "CLRRuntimeHeader", basetype="uint8_t", repeating=8},		-- .cormeta   CLR runtime header address
+		{name = "Reserved", basetype="uint8_t", repeating=8},				-- Reserved, must be zero
 
 	};
 
@@ -132,6 +227,7 @@ PE32Header_Info = {
 PE32PlusHeader_Info = {
 	name = "PE32PlusHeader";
 	fields = {
+		-- Fields common with PE32
 		{name = "Magic", basetype="uint16_t"},	-- , default = 0x20b
 		{name = "MajorLinkerVersion", basetype="uint8_t"},
 		{name = "MinorLinkerVersion", basetype="uint8_t"},
@@ -141,7 +237,9 @@ PE32PlusHeader_Info = {
 		{name = "AddressOfEntryPoint", basetype="uint32_t"},
 		{name = "BaseOfCode", basetype="uint32_t"},
 
-		{name = "ImageBase", basetype="uint64_t"},
+		-- The next 21 fields are Windows specific extensions to 
+		-- the COFF format
+		{name = "ImageBase", basetype="uint64_t"},						-- size difference
 		{name = "SectionAlignment", basetype="uint32_t"},
 		{name = "FileAlignment", basetype="uint32_t"},
 		{name = "MajorOperatingSystemVersion", basetype="uint16_t"},
@@ -156,10 +254,10 @@ PE32PlusHeader_Info = {
 		{name = "CheckSum", basetype="uint32_t"},
 		{name = "Subsystem", basetype="uint16_t"},
 		{name = "DllCharacteristics", basetype="uint16_t"},
-		{name = "SizeOfStackReserve", basetype="uint64_t"},
-		{name = "SizeOfStackCommit", basetype="uint64_t"},
-		{name = "SizeOfHeapReserve", basetype="uint64_t"},
-		{name = "SizeOfHeapCommit", basetype="uint64_t"},
+		{name = "SizeOfStackReserve", basetype="uint64_t"},				-- size difference
+		{name = "SizeOfStackCommit", basetype="uint64_t"},				-- size difference
+		{name = "SizeOfHeapReserve", basetype="uint64_t"},				-- size difference
+		{name = "SizeOfHeapCommit", basetype="uint64_t"},				-- size difference
 		{name = "LoaderFlags", basetype="uint32_t"},
 		{name = "NumberOfRvaAndSizes", basetype="uint32_t"},
 
