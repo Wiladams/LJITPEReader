@@ -3,14 +3,10 @@
 local ffi = require "ffi"
 
 local pestructs = require("peluaclasses")
+local peenums = require("peenums")
+peenums();
 
---[[
-	
-	References
 
-	http://ivanlef0u.fr/repo/windoz/pe/CBM_1_2_2006_Goppit_PE_Format_Reverse_Engineer_View.pdf
-	http://msdn.microsoft.com/en-us/magazine/cc301808.aspx
---]]
 
 
 --assuming machine is little endian
@@ -255,6 +251,14 @@ local function CreatePEReader(filename)
 end
 
 local exports = {
+	-- Table constants (enums)
+	Characteristics 	= Characteristics,
+	DllCharacteristics 	= DllCharacteristics,
+	MachineType 		= MachineType,
+	OptHeaderMagic 		= OptHeaderMagic,
+	Subsystem 			= Subsystem,
+
+	-- functions
 	buildDirectories = buildDirectories;
 	buildSectionHeaders = buildSectionHeaders;
 

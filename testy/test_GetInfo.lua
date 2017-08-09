@@ -175,7 +175,13 @@ end
 --local browser = CreatePEBrowser("HeadsUp.exe")
 --local browser = CreatePEBrowser("HexEdit.exe")
 --local browser = PEReader.CreatePEReader("c:/tools/openssl/openssl.exe")
-local browser = PEReader.CreatePEReader(arg[1])
+local filename = arg[1];
+
+if not filename then
+return
+end
+
+local browser = PEReader.CreatePEReader(filename)
 
 printDOSInfo(browser.DOSHeader)
 printCOFF(browser.FileHeader)

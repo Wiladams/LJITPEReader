@@ -9,6 +9,14 @@
 	will be appropriate for different programming environments.
 --]]
 
+--[[
+	
+	References
+
+	http://ivanlef0u.fr/repo/windoz/pe/CBM_1_2_2006_Goppit_PE_Format_Reverse_Engineer_View.pdf
+	http://msdn.microsoft.com/en-us/magazine/cc301808.aspx
+--]]
+
 local PETypes = {
 -- DOS .EXE header
 IMAGE_DOS_HEADER_Info = {
@@ -41,14 +49,6 @@ MAGIC_Info = {
 	fields = {
 		{name = "Signature", basetype = "char", repeating = 2}
 	};
-
-	enums = {
-		OptHeaderMagic = {
-			{value = 0x10b, name = "IMAGE_MAGIC_HEADER_PE32", description = "PE32"},
-			{value = 0x20b, name = "IMAGE_MAGIC_HEADER_PE32_PLUS", description = "PE32+"},
-		};
-	}
-
 };
 
 MAGIC2_Info = {
@@ -77,8 +77,12 @@ COFF_Info = {
 		{name = "SizeOfOptionalHeader", basetype = "uint16_t"};
 		{name = "Characteristics", basetype = "uint16_t"};
 	};
+};
 
+-- Enums related to various fields within the PE32 headers
+PEHeader = {
 	enums = {
+		-- COFF 'Machine' field
 		MachineType = {
 			{value = 0x0000, name = "IMAGE_FILE_MACHINE_UNKNOWN", description = "any"},
 			{value = 0x01c0, name = "IMAGE_FILE_MACHINE_ARM", description = "ARM little endian"},
@@ -104,6 +108,7 @@ COFF_Info = {
 			{value = 0xaa64, name = "IMAGE_FILE_MACHINE_ARM6", description = "ARMv8 in 64-bit mode"},
 		},
 
+		-- COFF Characteristics field
 		Characteristics = {
 			{value = 0x0001, name = "IMAGE_FILE_RELOCS_STRIPPED", description = "Image only, Windows CE, and Windows NT® and later. This indicates that the file does not contain base relocations and must therefore be loaded at its preferred base address. If the base address is not available, the loader reports an error. The default behavior of the linker is to strip base relocations from executable (EXE) files."},
 			{value = 0x0002, name = "IMAGE_FILE_EXECUTABLE_IMAGE", description = "Image only. This indicates that the image file is valid and can be run. If this flag is not set, it indicates a linker error."},
@@ -122,12 +127,12 @@ COFF_Info = {
 			{value = 0x4000, name = "IMAGE_FILE_UP_SYSTEM_ONLY", description = "The file should be run only on a uniprocessor machine."},
 			{value = 0x8000, name = "IMAGE_FILE_BYTES_REVERSED_HI", description = "Big endian: the MSB precedes the LSB in memory. This flag is deprecated and should be zero."},
 		}
-	}
-};
 
--- Enums related to various fields within the PE32 headers
-PEHeader = {
-	enums = {
+		OptHeaderMagic = {
+			{value = 0x10b, name = "IMAGE_MAGIC_HEADER_PE32", description = "PE32"},
+			{value = 0x20b, name = "IMAGE_MAGIC_HEADER_PE32_PLUS", description = "PE32+"},
+		};
+
 		Subsystem = {
 			{value = 0x0000, name = "IMAGE_SUBSYSTEM_UNKNOWN", description = "An unknown subsystem"},
 			{value = 0x0001, name = "IMAGE_SUBSYSTEM_NATIVE", description = "Device drivers and native Windows processes"},
@@ -157,10 +162,48 @@ PEHeader = {
 			{value = 0x1000, name = "IMAGE_DLL_RESERVED5", description = "Reserved, must be zero."},
 			{value = 0x2000, name = "IMAGE_DLLCHARACTERISTICS_WDM_DRIVER", description = "A WDM driver."},
 			{value = 0x8000, name = "IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE", description = "Terminal Server aware."},
+		};
 
+		-- Section flags of characteristics field of section header
+		SectionCharacteristics = {
+			{value = 0x00000000, name = "IMAGE_SCN_RESERVED1", description = "Reserved for future use."},
+			{value = 0x00000001, name = "IMAGE_SCN_RESERVED2", description = "Reserved for future use."},
+			{value = 0x00000002, name = "IMAGE_SCN_RESERVED3", description = "Reserved for future use."},
+			{value = 0x00000004, name = "IMAGE_SCN_RESERVED4", description = "Reserved for future use."},
+			{value = 0x00000008, name = "IMAGE_SCN_TYPE_NO_PAD", description = "The section should not be padded to the next boundary. This flag is obsolete and is replaced by IMAGE_SCN_ALIGN_1BYTES. This is valid only for object files."},
+			{value = 0x00000010, name = "IMAGE_SCN_RESERVED4", description = "Reserved for future use."},
+			{value = 0x00000020, name = "IMAGE_SCN_CNT_CODE", description = "The section contains executable code."},
+			{value = 0x00000040, name = "IMAGE_SCN_CNT_INITIALIZED_DATA", description = "The section contains initialized data."},
+			{value = 0x00000080, name = "IMAGE_SCN_CNT_UNINITIALIZED_ DATA", description = "The section contains uninitialized data."},
+			{value = 0x00000100, name = "IMAGE_SCN_LNK_OTHER", description = "Reserved for future use."},
+			{value = 0x00000200, name = "IMAGE_SCN_LNK_INFO", description = "The section contains comments or other information. The .drectve section has this type. This is valid for object files only."},
+			{value = 0x00000400, name = "RESERVED5", description = "Reserved for future use."},
+			{value = 0x00000800, name = "IMAGE_SCN_LNK_REMOVE", description = "The section will not become part of the image. This is valid only for object files."},
+			{value = 0x00001000, name = "IMAGE_SCN_LNK_COMDAT", description = "The section contains COMDAT data. For more information, see section 5.5.6, 'COMDAT Sections (Object Only).'' This is valid only for object files."},
+			{value = 0x00008000, name = "IMAGE_SCN_GPREL", description = "The section contains data referenced through the global pointer (GP)."},
+			{value = 0x00020000, name = "IMAGE_SCN_MEM_PURGEABLE", description = "Reserved for future use."},
 		};
 	}		
 };
+
+--[[
+local IMAGE_DIRECTORY_ENTRY_EXPORT          = 0   -- Export Directory
+local IMAGE_DIRECTORY_ENTRY_IMPORT          = 1   -- Import Directory
+local IMAGE_DIRECTORY_ENTRY_RESOURCE        = 2   -- Resource Directory
+local IMAGE_DIRECTORY_ENTRY_EXCEPTION       = 3   -- Exception Directory
+local IMAGE_DIRECTORY_ENTRY_SECURITY        = 4   -- Security Directory
+local IMAGE_DIRECTORY_ENTRY_BASERELOC       = 5   -- Base Relocation Table
+local IMAGE_DIRECTORY_ENTRY_DEBUG           = 6   -- Debug Directory
+--      IMAGE_DIRECTORY_ENTRY_COPYRIGHT       7   -- (X86 usage)
+local IMAGE_DIRECTORY_ENTRY_ARCHITECTURE    = 7   -- Architecture Specific Data
+local IMAGE_DIRECTORY_ENTRY_GLOBALPTR       = 8   -- RVA of GP
+local IMAGE_DIRECTORY_ENTRY_TLS             = 9   -- TLS Directory
+local IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG    = 10   -- Load Configuration Directory
+local IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT   = 11   -- Bound Import Directory in headers
+local IMAGE_DIRECTORY_ENTRY_IAT            = 12   -- Import Address Table
+local IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT   = 13   -- Delay Load Import Descriptors
+local IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR = 14   -- COM Runtime descriptor
+--]]
 
 PE32Header_Info = {
 	name = "PE32Header",
