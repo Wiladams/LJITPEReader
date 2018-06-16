@@ -1,5 +1,8 @@
 
-local DllCharacteristics = {
+local enum = require("enum")
+
+
+local DllCharacteristics = enum {
     IMAGE_DLL_RESERVED1 = 0x1,
     IMAGE_DLL_RESERVED2 = 0x2,
     IMAGE_DLL_RESERVED3 = 0x4,
@@ -15,7 +18,7 @@ local DllCharacteristics = {
     IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE = 0x8000,
 }
 
-local Subsystem = {
+local Subsystem = enum {
     IMAGE_SUBSYSTEM_UNKNOWN = 0x0,
     IMAGE_SUBSYSTEM_NATIVE = 0x1,
     IMAGE_SUBSYSTEM_WINDOWS_GUI = 0x2,
@@ -29,30 +32,30 @@ local Subsystem = {
     IMAGE_SUBSYSTEM_XBOX = 0x14,
 }
 
-local OptHeaderMagic = {
+local OptHeaderMagic = enum {
     IMAGE_MAGIC_HEADER_PE32 = 0x10b,
     IMAGE_MAGIC_HEADER_PE32_PLUS = 0x20b,
 }
 
-local Characteristics = {
-    IMAGE_FILE_RELOCS_STRIPPED = 0x1,
-    IMAGE_FILE_EXECUTABLE_IMAGE = 0x2,
-    IMAGE_FILE_LINE_NUMS_STRIPPED = 0x4,
-    IMAGE_FILE_LOCAL_SYMS_STRIPPED = 0x8,
-    IMAGE_FILE_AGGRESSIVE_WS_TRIM = 0x10,
-    IMAGE_FILE_LARGE_ADDRESS_AWARE = 0x20,
-    IMAGE_FILE_BYTES_REVERSED_LO = 0x80,
-    IMAGE_FILE_32BIT_MACHINE = 0x100,
-    IMAGE_FILE_DEBUG_STRIPPED = 0x200,
-    IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP = 0x400,
-    IMAGE_FILE_NET_RUN_FROM_SWAP = 0x800,
-    IMAGE_FILE_SYSTEM = 0x1000,
-    IMAGE_FILE_DLL = 0x2000,
-    IMAGE_FILE_UP_SYSTEM_ONLY = 0x4000,
-    IMAGE_FILE_BYTES_REVERSED_HI = 0x8000,
+local Characteristics = enum {
+    IMAGE_FILE_RELOCS_STRIPPED          = 0x0001,
+    IMAGE_FILE_EXECUTABLE_IMAGE         = 0x0002,
+    IMAGE_FILE_LINE_NUMS_STRIPPED       = 0x0004,
+    IMAGE_FILE_LOCAL_SYMS_STRIPPED      = 0x0008,
+    IMAGE_FILE_AGGRESSIVE_WS_TRIM       = 0x0010,
+    IMAGE_FILE_LARGE_ADDRESS_AWARE      = 0x0020,
+    IMAGE_FILE_BYTES_REVERSED_LO        = 0x0080,
+    IMAGE_FILE_32BIT_MACHINE            = 0x0100,
+    IMAGE_FILE_DEBUG_STRIPPED           = 0x0200,
+    IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP  = 0x0400,
+    IMAGE_FILE_NET_RUN_FROM_SWAP        = 0x0800,
+    IMAGE_FILE_SYSTEM                   = 0x1000,
+    IMAGE_FILE_DLL                      = 0x2000,
+    IMAGE_FILE_UP_SYSTEM_ONLY           = 0x4000,
+    IMAGE_FILE_BYTES_REVERSED_HI        = 0x8000,
 }
 
-local MachineType = {
+local MachineType = enum {
     IMAGE_FILE_MACHINE_UNKNOWN = 0x0,
     IMAGE_FILE_MACHINE_ARM = 0x1c0,
     IMAGE_FILE_MACHINE_ARMN = 0x1c4,
@@ -77,12 +80,14 @@ local MachineType = {
     IMAGE_FILE_MACHINE_ARM6 = 0xaa64,
 }
 
+
+
 local exports = {
-    DllCharacteristics = DllCharacteristics,
-    Subsystem = Subsystem,
-    OptHeaderMagic = OptHeaderMagic,
-    Characteristics = Characteristics,
-    MachineType = MachineType,
+    DllCharacteristics  = DllCharacteristics,
+    Subsystem           = Subsystem,
+    OptHeaderMagic      = OptHeaderMagic,
+    Characteristics     = Characteristics,
+    MachineType         = MachineType,
 }
 
 setmetatable(exports, {

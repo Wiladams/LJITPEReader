@@ -252,11 +252,11 @@ end
 
 local exports = {
 	-- Table constants (enums)
-	Characteristics 	= Characteristics,
-	DllCharacteristics 	= DllCharacteristics,
-	MachineType 		= MachineType,
-	OptHeaderMagic 		= OptHeaderMagic,
-	Subsystem 			= Subsystem,
+	Characteristics 	= peenums.Characteristics,
+	DllCharacteristics 	= peenums.DllCharacteristics,
+	MachineType 		= peenums.MachineType,
+	OptHeaderMagic 		= peenums.OptHeaderMagic,
+	Subsystem 			= peenums.Subsystem,
 
 	-- functions
 	buildDirectories = buildDirectories;
@@ -273,9 +273,11 @@ local exports = {
 }
 
 setmetatable(exports, {
-	__call = function(self, ...)
+	__call = function(self, tbl)
+		tbl = tbl or _G;
+
 		for k,v in pairs(exports) do
-			_G[k] = v;
+			tbl[k] = v;
 		end
 	end,
 	})

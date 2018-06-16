@@ -4,7 +4,7 @@ local ffi = require "ffi"
 
 local PEReader = require ("PEReader")
 PEReader();
-
+local enums = require("peenums")
 
 
 local function printDOSInfo(info)
@@ -18,12 +18,12 @@ end
 
 local function printCOFF(info)
 	print("==== COFF ====")
-	print(string.format("Machine: 0x%x", info:get_Machine()));
+	print(string.format("Machine: %s (0x%x)", enums.MachineType[info:get_Machine()], info:get_Machine()));
 	print("Number Of Sections: ", info:get_NumberOfSections());
 	print("Pointer To Symbol Table: ", info:get_PointerToSymbolTable());
 	print("Number of Symbols: ", info:get_NumberOfSymbols());
 	print("Size of Optional Header: ", info:get_SizeOfOptionalHeader());
-	print(string.format("Characteristics: 0x%x", info:get_Characteristics()));
+	print(string.format("Characteristics: 0x%4x", info:get_Characteristics()));
 end
 
 local function printPEHeader(browser)
