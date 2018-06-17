@@ -12,9 +12,11 @@
 --[[
 	
 	References
-
+	These links tend to go out of date rather quickly (within a few years)
 	http://ivanlef0u.fr/repo/windoz/pe/CBM_1_2_2006_Goppit_PE_Format_Reverse_Engineer_View.pdf
 	http://msdn.microsoft.com/en-us/magazine/cc301808.aspx
+	https://msdn.microsoft.com/en-us/library/ms809762.aspx
+
 --]]
 
 local PETypes = {
