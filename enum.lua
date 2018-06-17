@@ -1,7 +1,17 @@
+--[[
 -- metatable for enums
 -- simply provides the 'reverse lookup' in a 
 -- dictionary.  Make this the metatable whenever
 -- you need such functionality.
+-- 
+Usage:
+    local myenum = enum {
+        name1 = value1;
+        name2 = value2;
+        name3 = value3;
+    }
+--]]
+
 local enum = {}
 setmetatable(enum, {
     __call = function(self, ...)

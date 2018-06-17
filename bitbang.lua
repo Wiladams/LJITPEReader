@@ -47,17 +47,22 @@ local function numbertobinary(value, nbits, bigendian)
 end
 
 
+--[[
+	When converting a string that represents a binary number
+	The following is true:
+	0001 - value == 1, bigendian == true
 
-local function binarytonumber(str, bigendian)
+	The 'left', which will be string[0], is considered
+	'bigendian'.  This is the commen representation of binary
+	numbers, as well as any other base number system, so this is
+	the default case.
+--]]
+local function binarytonumber(str, littleendian)
 	local len = string.len(str)
 	local value = 0
 
-	if bigendian then
-		for i=0,len-1 do
-			if str:sub(len-i,len-i) == '1' then
-				value = setbit(value, i)
-			end
-		end
+	if not littleendian then
+		value = tonumber(str, 2);
 	else
 		for i=0, len-1 do
 			if str:sub(i+1,i+1) == '1' then
@@ -69,20 +74,20 @@ local function binarytonumber(str, bigendian)
 	return value
 end
 
-local function bytestobinary(bytes, length, offset, bigendian)
+local function bytestobinary(bytes, length, offset, littleendian)
 	offset = offset or 0
 	nbits = 8
 
 	local res={}
 
-	if bigendian then
+	if not littleendian then
 		for offset=length-1, 0,-1 do
-			table.insert(res, numbertobinary(bytes[offset],nbits, bigendian))
+			table.insert(res, numbertobinary(bytes[offset],nbits, littleendian))
 		end
 
 	else
 		for offset=0,length-1 do
-			table.insert(res, numbertobinary(bytes[offset],nbits, bigendian))
+			table.insert(res, numbertobinary(bytes[offset],nbits, littleendian))
 		end
 	end
 
@@ -133,13 +138,13 @@ local function getbitsfrombytes(bytes, startbit, bitcount)
 	return value
 end
 
-local function setbitstobytes(bytes, startbit, bitcount, value, bigendian)
+local function setbitstobytes(bytes, startbit, bitcount, value, littleendian)
 
 	local byteoffset=0;
 	local bitoffset=0;
 	local bitval = false
 
-	if bigendian then
+	if not littleendian then
 		for i=0,bitcount-1 do
 			byteoffset, bitoffset = getbitbyteoffset(startbit+i)
 			bitval = isset(value, i)
@@ -265,9 +270,10 @@ local exports = {
 -- put functions in global namespace
 
 setmetatable(exports, {
-	__call = function(self, ...)
+	__call = function(self, tbl)
+		tbl = tbl or _G
 		for k,v in pairs(exports) do
-			_G[k] = v;
+			tbl[k] = v;
 		end
 	end,
 })
