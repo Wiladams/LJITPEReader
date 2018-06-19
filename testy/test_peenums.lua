@@ -1,6 +1,6 @@
 package.path = package.path..";../?.lua"
 
-enums = require("peenums")
+enums = require("pereader.peenums")
 
 local function printValue(tableName, value)
     local key = enums[tableName][value];

@@ -50,8 +50,8 @@ function tt_memstream.init(self, data, size, position, littleendian)
     return obj
 end
 
-function tt_memstream.new(self, data, size, position)
-    return self:init(data, size, position);
+function tt_memstream.new(self, data, size, position, littleendian)
+    return self:init(data, size, position, littleendian);
 end
 
  -- move to a particular position, in bytes
@@ -92,7 +92,7 @@ end
 
 
 -- get 8 bits, and advance the cursor
-function tt_memstream.get8(self)
+function tt_memstream.read8(self)
     --print("self.cursor: ", self.cursor, self.size)
     if (self.cursor >= self.size) then
        return false;
@@ -107,19 +107,18 @@ function tt_memstream.get8(self)
   -- get as many bytes specified in n as an integer
  -- this could possibly work up to 7 byte integers
  -- converts from big endian to native format while it goes
-function tt_memstream.get(self, n)
-    --STBTT_assert(n >= 1 and n <= 4);
+function tt_memstream.read(self, n)
     local v = 0;
     local i = 0;
 
     if self.bigend then
         while  (i < n) do
-            v = bor(lshift(v, 8), self:get8());
+            v = bor(lshift(v, 8), self:read8());
             i = i + 1;
         end 
     else
         while  (i < n) do
-            v = bor(v, lshift(self:get8(), 8*i));
+            v = bor(v, lshift(self:read8(), 8*i));
             i = i + 1;
         end 
     end
@@ -128,7 +127,7 @@ function tt_memstream.get(self, n)
 end
 
 -- BUGBUG, do error checking against end of stream
-function tt_memstream.getBytes(self, n)
+function tt_memstream.readBytes(self, n)
     local bytes = ffi.new("uint8_t[?]", n)
     ffi.copy(bytes, self.data+self.cursor, n)
     self.cursor = self.cursor + n;
@@ -136,7 +135,7 @@ function tt_memstream.getBytes(self, n)
     return bytes;
 end
 
-function tt_memstream.getString(self, n)
+function tt_memstream.readString(self, n)
     if n < 1 then return false end
 
     local str = ffi.string(self.data+self.cursor, n)
@@ -146,50 +145,50 @@ function tt_memstream.getString(self, n)
     return str;
 end
 
-function tt_memstream.get16(self)  
-     return self:get(2)
+function tt_memstream.read16(self)  
+     return self:read(2)
 end
 
-function tt_memstream.get32(self)  
-    return tonumber(self:get(4))
+function tt_memstream.read32(self)  
+    return tonumber(self:read(4))
 end
 
 -- These ensure the sign is dealth with properly
-function tt_memstream.getInt8(self)
-    return tonumber(ffi.cast('int8_t', self:get(1)))
+function tt_memstream.readInt8(self)
+    return tonumber(ffi.cast('int8_t', self:read(1)))
 end
 
-function tt_memstream.getUInt8(self)
-    return tonumber(ffi.cast('uint8_t', self:get(1)))
+function tt_memstream.readUInt8(self)
+    return tonumber(ffi.cast('uint8_t', self:read(1)))
 end
 
-function tt_memstream.getInt16(self)
-    return tonumber(ffi.cast('int16_t', self:get(2)))
+function tt_memstream.readInt16(self)
+    return tonumber(ffi.cast('int16_t', self:read(2)))
 end
 
-function tt_memstream.getUInt16(self)
-    return tonumber(ffi.cast('uint16_t', self:get(2)))
+function tt_memstream.readUInt16(self)
+    return tonumber(ffi.cast('uint16_t', self:read(2)))
 end
 
 
 
-function tt_memstream.getInt32(self)
-    return tonumber(ffi.cast('int32_t', self:get(4)))
+function tt_memstream.readInt32(self)
+    return tonumber(ffi.cast('int32_t', self:read(4)))
 end
 
-function tt_memstream.getUInt32(self)
-    return tonumber(ffi.cast('uint32_t', self:get(4)))
+function tt_memstream.readUInt32(self)
+    return tonumber(ffi.cast('uint32_t', self:read(4)))
 end
 
-function tt_memstream.getFixed(self)
-    local decimal = self:getInt16();
-    local fraction = self:getUInt16();
+function tt_memstream.readFixed(self)
+    local decimal = self:readInt16();
+    local fraction = self:readUInt16();
 
     return decimal + fraction / 65535;
 end
 
-function tt_memstream.getF2Dot14(self)
-    return self:getInt16() / 16384;
+function tt_memstream.readF2Dot14(self)
+    return self:readInt16() / 16384;
 end
 
 -- get a subrange of the memory stream
@@ -203,9 +202,9 @@ function tt_memstream.range(self, pos, s)
 end
 
 -- Convenient types named in the documentation
-tt_memstream.getFWord = tt_memstream.getInt16;
-tt_memstream.getUFWord = tt_memstream.getUInt16;
-tt_memstream.getOffset16 = tt_memstream.getUInt16;
-tt_memstream.getOffset32 = tt_memstream.getUInt32;
+tt_memstream.readFWord = tt_memstream.readInt16;
+tt_memstream.readUFWord = tt_memstream.readUInt16;
+tt_memstream.readOffset16 = tt_memstream.readUInt16;
+tt_memstream.readOffset32 = tt_memstream.readUInt32;
 
 return tt_memstream

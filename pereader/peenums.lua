@@ -1,5 +1,5 @@
 
-local enum = require("enum")
+local enum = require("pereader.enum")
 
 
 local DllCharacteristics = enum {

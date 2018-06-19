@@ -2,8 +2,8 @@
 
 local ffi = require "ffi"
 
-local pestructs = require("peluaclasses")
-local peenums = require("peenums")
+local pestructs = require("pereader.peluaclasses")
+local peenums = require("pereader.peenums")
 peenums();
 
 

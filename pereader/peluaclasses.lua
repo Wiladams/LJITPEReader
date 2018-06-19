@@ -1,6 +1,7 @@
 local ffi = require('ffi')
-local class = require('class')
-local bitbang = require('bitbang')
+
+local class = require('pereader.class')
+local bitbang = require('pereader.bitbang')
 bitbang();
 
 
