@@ -126,6 +126,10 @@ function tt_memstream.read(self, n)
     return v;
 end
 
+function tt_memstream.readNumber(self, n)
+    return tonumber(self:read(n));
+end
+
 -- BUGBUG, do error checking against end of stream
 function tt_memstream.readBytes(self, n)
     local bytes = ffi.new("uint8_t[?]", n)
@@ -179,6 +183,15 @@ end
 function tt_memstream.readUInt32(self)
     return tonumber(ffi.cast('uint32_t', self:read(4)))
 end
+
+function tt_memstream.readInt64(self)
+    return tonumber(ffi.cast('int64_t', self:read(8)))
+end
+
+function tt_memstream.readUInt64(self)
+    return tonumber(ffi.cast('uint64_t', self:read(8)))
+end
+
 
 function tt_memstream.readFixed(self)
     local decimal = self:readInt16();
