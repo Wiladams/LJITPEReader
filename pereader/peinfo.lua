@@ -75,7 +75,39 @@ local function IsPe32PlusHeader(sig)
 return sig[0] == 0x0b and sig[1] == 0x02
 end
 
+--
+-- Given an RVA, look up the section header that encloses it and return a
+-- pointer to its IMAGE_SECTION_HEADER
+--
+function peinfo.GetEnclosingSectionHeader(self, rva)
+    for secname, section in pairs(self.Sections) do
+        -- Is the RVA within this section?
+        if (rva >= section.VirtualAddress) and
+             rva < (section.VirtualAddress + section.VirtualSize) then
+            return section;
+		end
+    end
 
+    return false;
+end
+
+function peinfo.GetPtrFromRVA(self, rva)
+
+	local delta;
+	local pSectionHdr = self:GetEnclosingSectionHeader( rva);
+
+	if ( not pSectionHdr ) then
+		return nil;
+	end
+
+	delta = (pSectionHdr:get_VirtualAddress() - pSectionHdr:get_PointerToRawData());
+	return ( browser.Buffer + rva - delta );
+end
+
+
+--[[]
+    Now for the actual parsing of the data stream
+]]
 function peinfo.readDOSHeader(self, ms)
     local res = {
         e_magic = ms:readBytes(2);                     -- Magic number

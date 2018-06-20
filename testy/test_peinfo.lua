@@ -34,7 +34,7 @@ local function printPEHeader(browser)
 	local info = browser.PEHeader
 
 	print("==== PE Header ====")
-	print(string.format("Magic: 0x%04X", info.Magic)
+	print(string.format("Magic: 0x%04X", info.Magic))
 	print(string.format("Major Linker Version: 0x%02x", info.MajorLinkerVersion))
 	print(string.format("Minor Linker Version: 0x%02x", info.MinorLinkerVersion))
 	print(string.format("Size Of Code: 0x%08x", info.SizeOfCode))
@@ -49,21 +49,7 @@ local function printPEHeader(browser)
 	print(string.format("Number of Rvas and Sizes: 0x%08X", info.NumberOfRvaAndSizes))
 end
 
---
--- Given an RVA, look up the section header that encloses it and return a
--- pointer to its IMAGE_SECTION_HEADER
---
-local function GetEnclosingSectionHeader(reader, rva)
-    for secname, section in pairs(reader.Sections) do
-        -- Is the RVA within this section?
-        if (rva >= section.VirtualAddress) and
-             rva < (section.VirtualAddress + section.VirtualSize) then
-            return section;
-		end
-    end
 
-    return nil;
-end
 
 
 local function printDirectoryEntries(reader, dirs)
@@ -74,7 +60,7 @@ local function printDirectoryEntries(reader, dirs)
 		local vaddr = dir.VirtualAddress
 		print(string.format("Name: %s  Address: 0x%08X  Size: 0x%08X", name, vaddr, dir.Size));
 		if vaddr > 0 then
-			local sec = GetEnclosingSectionHeader(reader, vaddr)
+			local sec = reader:GetEnclosingSectionHeader(vaddr)
 			if sec then
 			    print("  Section: ", sec.Name)
 			end
@@ -98,17 +84,112 @@ local function printSectionHeaders(reader)
 	end
 end
 
+local function printImports(reader)
+	print("===== IMPORTS =====")
 
-local mfile = mmap(filename);
+	local importdirref = reader.PEHeader.Directories.Import
+
+	if not importdirref then 
+		print("   NO Imports")
+		return 
+	end
+
+	-- Get the section the import directory is in
+	local importsStartRVA = importdirref.VirtualAddress
+	local importsSize = importdirref.Size
+	local section = reader:GetEnclosingSectionHeader(importsStartRVA)
+	if not section then
+		print("No section found for import directory")
+		return
+	end
+
+	print("Import Section: ", section.Name);
+
+	-- Get the actual address of the import descriptor
+	local importdescripptr = reader:GetPtrFromRVA(importsStartRVA)
+	local importdescrip = IMAGE_IMPORT_DESCRIPTOR(importdescripptr, importsSize)
+
+
+	-- Iterate over import descriptors
+	while true do
+
+		if importdescrip.TimeDateStamp == 0 and importdescrip.Name == 0 then
+			break
+		end
+
+		local nameptr = reader:GetPtrFromRVA(importdescrip.Name)
+		local importname = ffi.string(nameptr)
+		print("Import Name: ", importname);
+
+		--print(string.format("Original First Thunk: 0x08%X", importdescrip:get_OriginalFirstThunk()))
+		--print(string.format("TimeStamp: 0x08%X", importdescrip:get_TimeDateStamp()))
+		--print(string.format("Forwarder Chain: 0x08%X", importdescrip:get_ForwarderChain()))
+		--print(string.format("Name: 0x08%X", importdescrip:get_Name()))
+		--print(string.format("First Thunk: 0x08%X", importdescrip:get_FirstThunk()))
+
+		-- Iterate over the invividual import entries
+		local thunk = importdescrip.OriginalFirstThunk
+		local thunkIAT = importdescrip.FirstThunk
+
+		if thunk == 0 then
+			-- Yes!  Must have a non-zero FirstThunk field then
+			thunk = thunkIAT;
+
+			if (thunk == 0) then
+				return ;
+			end
+		end
+
+		thunk = reader:GetPtrFromRVA(thunk);
+		if not thunk then
+			return
+		end
+
+		thunkIAT = reader:GetPtrFromRVA(thunkIAT);
+
+		thunk = IMAGE_THUNK_DATA(thunk, importdescrip.ClassSize);
+		thunkIAT = IMAGE_THUNK_DATA(thunkIAT, importdescrip.ClassSize);
+
+		while (true) do
+			local thunkPtr = thunk.Data
+			if thunkPtr == 0 then
+				break;
+			end
+
+			if (false) then -- band(thunk.Data, IMAGE_ORDINAL_FLAG) then
+			else
+				local pOrdinalName = thunkPtr;
+				pOrdinalName = reader:GetPtrFromRVA(pOrdinalName);
+				pOrdinalName = IMAGE_IMPORT_BY_NAME(pOrdinalName, importdescrip.ClassSize)
+				local actualName = pOrdinalName.Name
+				actualName = ffi.string(actualName)
+				print(string.format("\t%s", actualName))
+			end
+
+			thunk.DataPtr = thunk.DataPtr + thunk.ClassSize;
+			thunkIAT.DataPtr = thunkIAT.DataPtr + thunkIAT.ClassSize;
+		end
+
+
+		importdescrip.DataPtr = importdescrip.DataPtr + importdescrip.ClassSize
+	end
+end
+
+
+local function main()
+	local mfile = mmap(filename);
 --print("MFILE: ", mfile)
-local data = ffi.cast("uint8_t *", mfile:getPointer());
+	local data = ffi.cast("uint8_t *", mfile:getPointer());
 
-local peinfo = peinfo(data, mfile.size);
+	local peinfo = peinfo(data, mfile.size);
 
 
-printDOSInfo(peinfo.DOSHeader)
-printCOFF(peinfo)
-printPEHeader(peinfo)
-printDirectoryEntries(peinfo)
-printSectionHeaders(peinfo)
-printImports(peinfo)
+	printDOSInfo(peinfo.DOSHeader)
+	printCOFF(peinfo)
+	printPEHeader(peinfo)
+	printDirectoryEntries(peinfo)
+	printSectionHeaders(peinfo)
+	--printImports(peinfo)
+end
+
+main()
