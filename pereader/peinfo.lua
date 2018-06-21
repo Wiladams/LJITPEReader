@@ -1,7 +1,11 @@
+--[[
+    Reference Material:
+    https://msdn.microsoft.com/library/windows/desktop/ms680547(v=vs.85).aspx
+]]
 local ffi = require("ffi")
 
 local binstream = require("pereader.binstream")
-
+local enums = require("pereader.peenums")
 
 
 local IMAGE_DIRECTORY_ENTRY_EXPORT          = 0   -- Export Directory
@@ -125,11 +129,11 @@ function peinfo.readDOSHeader(self, ms)
         e_lfarlc = ms:readUInt16();                    -- File address of relocation table
         e_ovno = ms:readUInt16();                      -- Overlay number
         ms:skip(4*2);
-        --e_res, basetype="uint16_t", repeating=4},          -- Reserved s
+        --e_res, basetype="uint16_t", repeating=4},    -- Reserved s
         e_oemid = ms:readUInt16();                     -- OEM identifier (for e_oeminfo)
         e_oeminfo = ms:readUInt16();                   -- OEM information; e_oemid specific
         ms:skip(10*2);
-        --e_res2, basetype="uint16_t", repeating=10},        -- Reserved s
+        --e_res2, basetype="uint16_t", repeating=10},  -- Reserved s
         e_lfanew = ms:readUInt32();                    -- File address of new exe header
     }
 
@@ -154,6 +158,10 @@ function peinfo.readCOFF(self, ms)
     return res;
 end
 
+--[[
+    In the context of a PEHeader, a directory is a simple
+    structure containing a virtual address, and a size
+]]
 local function readDirectory(ms, id)
     local res = {
         ID = id;
@@ -267,44 +275,27 @@ function peinfo.readPE32PlusHeader(self, ms)
 		LoaderFlags = ms:readUInt32();
 		NumberOfRvaAndSizes = ms:readUInt32();
 
-                -- Data directories
-                Directories = {
-                    ExportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXPORT);			-- .edata  exports
-                    ImportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IMPORT);			-- .idata  imports
-                    ResourceTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_RESOURCE);			-- .rsrc   resource table
-                    ExceptionTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXCEPTION);			-- .pdata  exceptions table
-                    CertificateTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_SECURITY);		--         attribute certificate table
-                    BaseRelocationTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BASERELOC);	-- .reloc  base relocation table
+        -- Data directories
+        Directories = {
+            ExportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXPORT);			-- .edata  exports
+            ImportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IMPORT);			-- .idata  imports
+            ResourceTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_RESOURCE);			-- .rsrc   resource table
+            ExceptionTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXCEPTION);			-- .pdata  exceptions table
+            CertificateTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_SECURITY);		--         attribute certificate table
+            BaseRelocationTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BASERELOC);	-- .reloc  base relocation table
                 
-                    Debug = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DEBUG);					-- .debug  debug data starting address
-                    Architecture = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_ARCHITECTURE);			-- architecture, reserved
-                    GlobalPtr = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_GLOBALPTR);				-- global pointer
-                    TLSTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_TLS);				-- .tls    Thread local storage
-                    LoadConfigTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG);		-- load configuration structure
-                    BoundImport = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT);			-- bound import table
-                    IAT = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IAT);					-- import address table
-                    DelayImportDescriptor = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT);	-- delay import descriptor
-                    CLRRuntimeHeader = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR);		-- .cormeta   CLR runtime header address
-                    Reserved = readDirectory(ms);				-- Reserved, must be zero
-                };
---[[                
-		ExportTable", basetype="uint8_t", repeating=8},
-		ImportTable", basetype="uint8_t", repeating=8},
-		ResourceTable", basetype="uint8_t", repeating=8},
-		ExceptionTable", basetype="uint8_t", repeating=8},
-		CertificateTable", basetype="uint8_t", repeating=8},
-		BaseRelocationTable", basetype="uint8_t", repeating=8},
-		Debug", basetype="uint8_t", repeating=8},
-		Architecture", basetype="uint8_t", repeating=8},
-		GlobalPtr", basetype="uint8_t", repeating=8},
-		TLSTable", basetype="uint8_t", repeating=8},
-		LoadConfigTable", basetype="uint8_t", repeating=8},
-		BoundImport", basetype="uint8_t", repeating=8},
-		IAT", basetype="uint8_t", repeating=8},
-		DelayImportDescriptor", basetype="uint8_t", repeating=8},
-		CLRRuntimeHeader", basetype="uint8_t", repeating=8},
-        Reserved", basetype="uint8_t", repeating=8},
---]]
+            Debug = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DEBUG);					-- .debug  debug data starting address
+            Architecture = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_ARCHITECTURE);			-- architecture, reserved
+            GlobalPtr = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_GLOBALPTR);				-- global pointer
+            TLSTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_TLS);				-- .tls    Thread local storage
+            LoadConfigTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG);		-- load configuration structure
+            BoundImport = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT);			-- bound import table
+            IAT = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IAT);					-- import address table
+            DelayImportDescriptor = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT);	-- delay import descriptor
+            CLRRuntimeHeader = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR);		-- .cormeta   CLR runtime header address
+            Reserved = readDirectory(ms);				-- Reserved, must be zero
+        };
+
     }
     
     return res;

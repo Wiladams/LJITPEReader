@@ -5,6 +5,8 @@ local ffi = require("ffi")
 local peinfo = require("pereader.peinfo")
 local enums = require("pereader.peenums")
 local mmap = require("pereader.mmap_win32")
+local binstream = require("pereader.binstream")
+
 
 local filename = arg[1];
 
@@ -14,7 +16,7 @@ if not filename then
 end
 
 local function printDOSInfo(info)
-	print(string.format("Magic: %c%c", info.e_magic[0], info.e_magic[1]))
+	print(string.format("    Magic: %c%c", info.e_magic[0], info.e_magic[1]))
 	print(string.format("PE Offset: 0x%x", info.e_lfanew));
 end
 
@@ -23,29 +25,27 @@ local function printCOFF(reader)
 
 	print("==== COFF ====")
 	print(string.format("Machine: %s (0x%x)", enums.MachineType[info.Machine], info.Machine));
-	print("Number Of Sections: ", info.NumberOfSections);
+	print("     Number Of Sections: ", info.NumberOfSections);
 	print("Pointer To Symbol Table: ", info.PointerToSymbolTable);
-	print("Number of Symbols: ", info.NumberOfSymbols);
+	print("      Number of Symbols: ", info.NumberOfSymbols);
 	print("Size of Optional Header: ", info.SizeOfOptionalHeader);
-	print(string.format("Characteristics: 0x%04x", info.Characteristics));
+	print(string.format("        Characteristics: 0x%04x", info.Characteristics));
 end
 
 local function printPEHeader(browser)
 	local info = browser.PEHeader
 
 	print("==== PE Header ====")
-	print(string.format("Magic: 0x%04X", info.Magic))
-	print(string.format("Major Linker Version: 0x%02x", info.MajorLinkerVersion))
-	print(string.format("Minor Linker Version: 0x%02x", info.MinorLinkerVersion))
-	print(string.format("Size Of Code: 0x%08x", info.SizeOfCode))
-
-	print(string.format("Address of Entry Point: 0x%08X", info.AddressOfEntryPoint))
-	print(string.format("Base of Code: 0x%08X", info.BaseOfCode))
+	print(string.format("                   Magic: 0x%04X", info.Magic))
+	print(string.format("    Major Linker Version: 0x%02x", info.MajorLinkerVersion))
+	print(string.format("    Minor Linker Version: 0x%02x", info.MinorLinkerVersion))
+	print(string.format("            Size Of Code: 0x%08x", info.SizeOfCode))
+	print(string.format("  Address of Entry Point: 0x%08X", info.AddressOfEntryPoint))
+	print(string.format("            Base of Code: 0x%08X", info.BaseOfCode))
 	if info.BaseOfData then
-		print(string.format("Base of Data: 0x%08X", info.BaseOfData))
+		print(string.format("            Base of Data: 0x%08X", info.BaseOfData))
 	end
-	print(string.format("Image Base: 0x%08X", info.ImageBase))
-
+	print(string.format("              Image Base: 0x%08X", info.ImageBase))
 	print(string.format("Number of Rvas and Sizes: 0x%08X", info.NumberOfRvaAndSizes))
 end
 
@@ -54,11 +54,13 @@ end
 
 local function printDirectoryEntries(reader, dirs)
 	local dirs = reader.PEHeader.Directories
-	print("==== printDirectoryEntries ====")
+	print("==== Directory Entries ====")
 	for name,dir in pairs(dirs) do
 		--print(name, dir)
 		local vaddr = dir.VirtualAddress
-		print(string.format("Name: %s  Address: 0x%08X  Size: 0x%08X", name, vaddr, dir.Size));
+		print(string.format("Name: %s", name));
+		print(string.format("  Address: 0x%08X", vaddr));
+		print(string.format("     Size: %d", dir.Size))
 		if vaddr > 0 then
 			local sec = reader:GetEnclosingSectionHeader(vaddr)
 			if sec then
@@ -72,15 +74,15 @@ local function printSectionHeaders(reader)
 	print("===== SECTIONS =====")
 	for name,section in pairs(reader.Sections) do
 		print("Name: ", name)
-		print(string.format("\tVirtual Size: 0x%08X", section.VirtualSize))
-		print(string.format("\tVirtual Address: 0x%08X", section.VirtualAddress))
-		print(string.format("\tSize of Raw Data: 0x%08X", section.SizeOfRawData))
-		print(string.format("\tPointer to Raw Data: 0x%08X", section.PointerToRawData))
-		print(string.format("\tPointer to Relocations: 0x%08X", section.PointerToRelocations))
-		print(string.format("\tPointer To Linenumbers: 0x%08X", section.PointerToLinenumbers))
-		print(string.format("\tNumber of Relocations: %d", section.NumberOfRelocations))
-		print(string.format("\tNumber of Line Numbers: %d", section.NumberOfLinenumbers))
-		print(string.format("\tCharacteristics: 0x%08X", section.Characteristics))
+		print(string.format("            Virtual Size: 0x%08X", section.VirtualSize))
+		print(string.format("         Virtual Address: 0x%08X", section.VirtualAddress))
+		print(string.format("        Size of Raw Data: 0x%08X", section.SizeOfRawData))
+		print(string.format("     Pointer to Raw Data: 0x%08X", section.PointerToRawData))
+		print(string.format("  Pointer to Relocations: 0x%08X", section.PointerToRelocations))
+		print(string.format("  Pointer To Linenumbers: 0x%08X", section.PointerToLinenumbers))
+		print(string.format("   Number of Relocations: %d", section.NumberOfRelocations))
+		print(string.format("  Number of Line Numbers: %d", section.NumberOfLinenumbers))
+		print(string.format("         Characteristics: 0x%08X", section.Characteristics))
 	end
 end
 
@@ -107,12 +109,19 @@ local function printImports(reader)
 
 	-- Get the actual address of the import descriptor
 	local importdescripptr = reader:GetPtrFromRVA(importsStartRVA)
-	local importdescrip = IMAGE_IMPORT_DESCRIPTOR(importdescripptr, importsSize)
+	--local importdescrip = IMAGE_IMPORT_DESCRIPTOR(importdescripptr, importsSize)
+	local ms = binstream(importdescripptr, importsSize)
 
 
 	-- Iterate over import descriptors
 	while true do
-
+		local importdescrip = {
+			ImportLookupTable = ms:readUInt32();
+			TimeDateStamp = ms:readUInt32();
+			ForwarderChain = ms:readUInt32();
+			Name = ms:readUInt32();					-- RVA
+			ImportAddressTable = ms:readUInt32();	-- RVA
+		}
 		if importdescrip.TimeDateStamp == 0 and importdescrip.Name == 0 then
 			break
 		end
@@ -128,8 +137,8 @@ local function printImports(reader)
 		--print(string.format("First Thunk: 0x08%X", importdescrip:get_FirstThunk()))
 
 		-- Iterate over the invividual import entries
-		local thunk = importdescrip.OriginalFirstThunk
-		local thunkIAT = importdescrip.FirstThunk
+		local thunk = importdescrip.ImportLookupTable
+		local thunkIAT = importdescrip.ImportAddressTable
 
 		if thunk == 0 then
 			-- Yes!  Must have a non-zero FirstThunk field then
@@ -146,7 +155,7 @@ local function printImports(reader)
 		end
 
 		thunkIAT = reader:GetPtrFromRVA(thunkIAT);
-
+--[[
 		thunk = IMAGE_THUNK_DATA(thunk, importdescrip.ClassSize);
 		thunkIAT = IMAGE_THUNK_DATA(thunkIAT, importdescrip.ClassSize);
 
@@ -169,9 +178,9 @@ local function printImports(reader)
 			thunk.DataPtr = thunk.DataPtr + thunk.ClassSize;
 			thunkIAT.DataPtr = thunkIAT.DataPtr + thunkIAT.ClassSize;
 		end
+--]]
 
-
-		importdescrip.DataPtr = importdescrip.DataPtr + importdescrip.ClassSize
+		--importdescrip.DataPtr = importdescrip.DataPtr + importdescrip.ClassSize
 	end
 end
 
@@ -189,7 +198,7 @@ local function main()
 	printPEHeader(peinfo)
 	printDirectoryEntries(peinfo)
 	printSectionHeaders(peinfo)
-	--printImports(peinfo)
+	printImports(peinfo)
 end
 
 main()
