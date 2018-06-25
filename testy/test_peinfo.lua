@@ -2,8 +2,9 @@ package.path = package.path..";../?.lua"
 
 local ffi = require("ffi")
 
+local enum = require("pereader.enum")
 local peinfo = require("pereader.peinfo")
-local enums = require("pereader.peenums")
+local peenums = require("pereader.peenums")
 local mmap = require("pereader.mmap_win32")
 local binstream = require("pereader.binstream")
 
@@ -15,6 +16,7 @@ if not filename then
     return
 end
 
+
 local function printDOSInfo(info)
 	print(string.format("    Magic: %c%c", info.e_magic[0], info.e_magic[1]))
 	print(string.format("PE Offset: 0x%x", info.e_lfanew));
@@ -24,12 +26,14 @@ local function printCOFF(reader)
 	local info = reader.FileHeader;
 
 	print("==== COFF ====")
-	print(string.format("Machine: %s (0x%x)", enums.MachineType[info.Machine], info.Machine));
+	print(string.format("Machine: %s (0x%x)", peenums.MachineType[info.Machine], info.Machine));
 	print("     Number Of Sections: ", info.NumberOfSections);
 	print("Pointer To Symbol Table: ", info.PointerToSymbolTable);
 	print("      Number of Symbols: ", info.NumberOfSymbols);
 	print("Size of Optional Header: ", info.SizeOfOptionalHeader);
-	print(string.format("        Characteristics: 0x%04x", info.Characteristics));
+	print(string.format("        Characteristics: 0x%04x  (%s)", info.Characteristics,
+		enum.bitValues(peenums.Characteristics, info.Characteristics, 32)));
+	--print(string.format("        Characteristics: 0x%04x", info.Characteristics));
 end
 
 local function printPEHeader(browser)
@@ -82,7 +86,8 @@ local function printSectionHeaders(reader)
 		print(string.format("  Pointer To Linenumbers: 0x%08X", section.PointerToLinenumbers))
 		print(string.format("   Number of Relocations: %d", section.NumberOfRelocations))
 		print(string.format("  Number of Line Numbers: %d", section.NumberOfLinenumbers))
-		print(string.format("         Characteristics: 0x%08X", section.Characteristics))
+		print(string.format("         Characteristics: 0x%08X  (%s)", section.Characteristics, 
+			enum.bitValues(peenums.SectionCharacteristics, section.Characteristics)))
 	end
 end
 
