@@ -92,7 +92,8 @@ local function printSectionHeaders(reader)
 end
 
 local function printImports(reader)
-	print("===== IMPORTS =====")
+--[[
+		print("===== IMPORTS =====")
 
 	local importdirref = reader.PEHeader.Directories.Import
 
@@ -158,9 +159,9 @@ local function printImports(reader)
 		if not thunk then
 			return
 		end
-
-		thunkIAT = reader:GetPtrFromRVA(thunkIAT);
+--]]
 --[[
+		thunkIAT = reader:GetPtrFromRVA(thunkIAT);
 		thunk = IMAGE_THUNK_DATA(thunk, importdescrip.ClassSize);
 		thunkIAT = IMAGE_THUNK_DATA(thunkIAT, importdescrip.ClassSize);
 
@@ -186,7 +187,7 @@ local function printImports(reader)
 --]]
 
 		--importdescrip.DataPtr = importdescrip.DataPtr + importdescrip.ClassSize
-	end
+	--end
 end
 
 

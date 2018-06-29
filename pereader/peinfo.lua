@@ -87,33 +87,25 @@ end
 -- pointer to its IMAGE_SECTION_HEADER
 --
 function peinfo.GetEnclosingSectionHeader(self, rva)
-    print("==== EnclosingSection: ", rva)
+    --print("==== EnclosingSection: ", rva)
     for secname, section in pairs(self.Sections) do
         -- Is the RVA within this section?
         --print(secname, section.VirtualAddress, section.VirtualAddress+section.VirtualSize)
-        if (rva >= section.VirtualAddress) and
-             rva < (section.VirtualAddress + section.VirtualSize) then
-                --print("MATCHED SECTION: ", secname)
-            return section;
-		end
+        local pos = rva - section.VirtualAddress;
+        if pos > 0 and pos < section.VirtualSize then
+            -- return section, and the calculated fileoffset of the rva
+            return section, pos 
+        end
     end
 
     return false;
 end
 
 function peinfo.fileOffsetFromRVA(self, rva)
---print("==== fileOffsetFromRVA: ", rva)
-	local delta;
-	local section = self:GetEnclosingSectionHeader( rva);
-
-	if ( not section ) then
-		return false;
-	end
-    local fileOffset = rva - section.VirtualAddress + section.PointerToRawData;
-
-	--local delta = section.VirtualAddress - section.PointerToRawData;
-    --return ( browser.Buffer + rva - delta );
-    return fileOffset;
+print("==== fileOffsetFromRVA: ", rva)
+	local section, offset = self:GetEnclosingSectionHeader( rva);
+print(section.name)
+    return offset or false
 end
 
 
@@ -229,7 +221,7 @@ function peinfo.readPE32Header(self, ms)
 		    ImportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IMPORT);			-- .idata  imports
 		    ResourceTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_RESOURCE);			-- .rsrc   resource table
 		    ExceptionTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXCEPTION);			-- .pdata  exceptions table
-		    CertificateTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_SECURITY);		--         attribute certificate table
+		    CertificateTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_SECURITY);		--         attribute certificate table, fileoffset, NOT RVA
             BaseRelocationTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BASERELOC);	-- .reloc  base relocation table
         
 		    Debug = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DEBUG);					-- .debug  debug data starting address
@@ -292,7 +284,7 @@ function peinfo.readPE32PlusHeader(self, ms)
             ImportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IMPORT);			-- .idata  imports
             ResourceTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_RESOURCE);			-- .rsrc   resource table
             ExceptionTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXCEPTION);			-- .pdata  exceptions table
-            CertificateTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_SECURITY);		--         attribute certificate table
+            CertificateTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_SECURITY);		--         attribute certificate table, fileoffset, NOT RVA
             BaseRelocationTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BASERELOC);	-- .reloc  base relocation table
                 
             Debug = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DEBUG);					-- .debug  debug data starting address
@@ -321,21 +313,33 @@ function peinfo.readDirectory_Export(self)
         return false 
     end
 
-    -- turn the RVA Virtual address into a file address
-    local fileOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
-print("  fileOffset: ", fileOffset)
+    -- If the virtual address is zero, then we don't actually
+    -- have any exports
+    if dirTable.VirtualAddress == 0 then
+        return false;
+    end
 
-    -- Setup a binstream and start reading
-    print("  binstream: ", self._data, self._size)
-    local ms = binstream(self._data, self._size)
+    -- We use the directory entry to lookup the actual export table.
+    -- We need to turn the VirtualAddress into an actual file offset
+    print(string.format("  dirTable.VirtualAddress: 0x%x", dirTable.VirtualAddress))
+    local fileOffset = tonumber(self:fileOffsetFromRVA(dirTable.VirtualAddress))
+    print(string.format("  fileOffset: 0x%x", fileOffset))
+
+    -- We now know where the actual export table exists, so 
+    -- create a binary stream, and position it at the offset
+    print("   binstream: ", self._data, self._size)
+    local ms = binstream(self._data, tonumber(self._size))
     ms:seek(fileOffset);
 
+    -- We are now in position to read the actual export table data
+    -- The data consists of various bits and pieces of information, including
+    -- pointers to the actual export information.
     local res = {
         Characteristics = ms:readUInt32();
         TimeDateStamp = ms:readUInt32();
         MajorVersion = ms:readUInt16();
         MinorVersion = ms:readUInt16();
-        nName = ms:readUInt32();
+        nName = ms:readUInt32();                -- Relative to image base
         nBase = ms:readUInt32();
         NumberOfFunctions = ms:readUInt32();
         NumberOfNames = ms:readUInt32();
@@ -344,6 +348,12 @@ print("  fileOffset: ", fileOffset)
         AddressOfNameOrdinals = ms:readUInt32();
     }
 
+    print("        Export Flags: ", res.Characteristics)
+    print("        Ordinal Base: ", res.nBase)
+    print("   NumberOfFunctions: ", res.NumberOfFunctions);
+    print("       NumberOfNames: ", res.NumberOfNames);
+    print("  AddressOfFunctions: ", res.AddressOfFunctions);
+    print("      AddressOfNames: ", res.AddressOfNames);
     return res;
 end
 
@@ -353,25 +363,29 @@ function peinfo.readDirectory_Import(self)
     if not dirTable then return false end
 
     -- turn the RVA Virtual address into a file address
+print("  dirTable.VirtualAddress: ", dirTable.VirtualAddress)
     local fileOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
-
+print("               fileOffset: ", fileOffset)
     -- Setup a binstream and start reading
     local ms = binstream(self._data, self._size)
     ms:seek(fileOffset);
 
     local res = {
-        OriginalFirstThunk = ms:readUInt32();   -- RVA to IMAGE_THUNK_DATA array
-        TimeDateStamp = ms:readUInt32();
-        ForwarderChain = ms:readUInt32();
-        Name1 = ms:readUInt32();                -- RVA, Name of the .dll or .exe
-        FirstThunk = ms:readUInt32();
+        OriginalFirstThunk  = ms:readUInt32();   -- RVA to IMAGE_THUNK_DATA array
+        TimeDateStamp       = ms:readUInt32();
+        ForwarderChain      = ms:readUInt32();
+        Name1               = ms:readUInt32();   -- RVA, Name of the .dll or .exe
+        FirstThunk          = ms:readUInt32();
     }
 
     -- turn the name into an actual name
+    print("                res.Name1: ", res.Name1)
     local Name1Offset = self:fileOffsetFromRVA(res.Name1)
+    if Name1Offset then
     ms:seek(Name1Offset);
     res.DllName = ms:readString();
     print("DllName: ", res.DllName)
+    end 
 
     return res;
 end
