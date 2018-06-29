@@ -140,10 +140,9 @@ function tt_memstream.readBytes(self, n)
 end
 
 function tt_memstream.readString(self, n)
-    if n < 1 then return false end
+    --if n < 1 then return false end
 
     local str = ffi.string(self.data+self.cursor, n)
-    --print("STR: ", #str)
     self.cursor = self.cursor + n;
 
     return str;

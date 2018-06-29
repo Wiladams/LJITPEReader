@@ -37,21 +37,24 @@ local peinfo_mt = {
     __index = peinfo;
 }
 
-function peinfo.init(self, data, len)
+function peinfo.init(self, data, size)
 
-    local obj = {}
+    local obj = {
+        _data = data;
+        _size = size;
+    }
 
     setmetatable(obj, peinfo_mt)
     
-    local ms = binstream(data, len, 0, true);
+    local ms = binstream(data, size, 0, true);
 
     peinfo.parseData(obj, ms);
 
     return obj;
 end
 
-function peinfo.create(self, data, len)
-    return self:init(data, len)
+function peinfo.create(self, data, size)
+    return self:init(data, size)
 end
 
 --[[
@@ -84,10 +87,13 @@ end
 -- pointer to its IMAGE_SECTION_HEADER
 --
 function peinfo.GetEnclosingSectionHeader(self, rva)
+    print("==== EnclosingSection: ", rva)
     for secname, section in pairs(self.Sections) do
         -- Is the RVA within this section?
+        --print(secname, section.VirtualAddress, section.VirtualAddress+section.VirtualSize)
         if (rva >= section.VirtualAddress) and
              rva < (section.VirtualAddress + section.VirtualSize) then
+                --print("MATCHED SECTION: ", secname)
             return section;
 		end
     end
@@ -95,17 +101,19 @@ function peinfo.GetEnclosingSectionHeader(self, rva)
     return false;
 end
 
-function peinfo.GetPtrFromRVA(self, rva)
-
+function peinfo.fileOffsetFromRVA(self, rva)
+--print("==== fileOffsetFromRVA: ", rva)
 	local delta;
-	local pSectionHdr = self:GetEnclosingSectionHeader( rva);
+	local section = self:GetEnclosingSectionHeader( rva);
 
-	if ( not pSectionHdr ) then
-		return nil;
+	if ( not section ) then
+		return false;
 	end
+    local fileOffset = rva - section.VirtualAddress + section.PointerToRawData;
 
-	delta = (pSectionHdr:get_VirtualAddress() - pSectionHdr:get_PointerToRawData());
-	return ( browser.Buffer + rva - delta );
+	--local delta = section.VirtualAddress - section.PointerToRawData;
+    --return ( browser.Buffer + rva - delta );
+    return fileOffset;
 end
 
 
@@ -165,15 +173,17 @@ end
 local function readDirectory(ms, id)
     local res = {
         ID = id;
-        VirtualAddress = ms:readUInt32();
+        VirtualAddress = ms:readUInt32();   -- RVA
         Size = ms:readUInt32();
     }
 
     return res;
 end
 
+
+
 function peinfo.readPE32Header(self, ms)
-    local res = {
+    self.PEHeader = {
 		-- Fields common to PE32 and PE+
 		Magic = ms:readUInt16();	-- , default = 0x10b
 		MajorLinkerVersion = ms:readUInt8();
@@ -181,17 +191,17 @@ function peinfo.readPE32Header(self, ms)
 		SizeOfCode = ms:readUInt32();
 		SizeOfInitializedData = ms:readUInt32();
 		SizeOfUninitializedData = ms:readUInt32();
-		AddressOfEntryPoint = ms:readUInt32();
-		BaseOfCode = ms:readUInt32();
+		AddressOfEntryPoint = ms:readUInt32();      -- RVA
+		BaseOfCode = ms:readUInt32();               -- RVA
 
 		-- PE32 has BaseOfData, which is not in the PE32+ header
-		BaseOfData = ms:readUInt32();
+		BaseOfData = ms:readUInt32();               -- RVA
 
 		-- The next 21 fields are Windows specific extensions to 
 		-- the COFF format
 		ImageBase = ms:readUInt32();
-		SectionAlignment = ms:readUInt32();
-		FileAlignment = ms:readUInt32();
+		SectionAlignment = ms:readUInt32();             -- How are sections alinged in RAM
+		FileAlignment = ms:readUInt32();                -- alignment of sections in file
 		MajorOperatingSystemVersion = ms:readUInt16();
 		MinorOperatingSystemVersion = ms:readUInt16();
 		MajorImageVersion = ms:readUInt16();
@@ -200,7 +210,7 @@ function peinfo.readPE32Header(self, ms)
 		MinorSubsystemVersion = ms:readUInt16();
 		Win32VersionValue = ms:readUInt32();             -- reserved
 		SizeOfImage = ms:readUInt32();
-		SizeOfHeaders = ms:readUInt32();
+		SizeOfHeaders = ms:readUInt32();                    -- Essentially, offset to first sections
 		CheckSum = ms:readUInt32();
 		Subsystem = ms:readUInt16();
 		DllCharacteristics = ms:readUInt16();
@@ -235,12 +245,13 @@ function peinfo.readPE32Header(self, ms)
         }
 
     }
+    
 
-    return res;
+    return self;
 end
 
 function peinfo.readPE32PlusHeader(self, ms)
-    local res = {
+    self.PEHeader = {
 		-- Fields common with PE32
 		Magic = ms:readUInt16();	-- , default = 0x20b
 		MajorLinkerVersion = ms:readUInt8();
@@ -298,7 +309,80 @@ function peinfo.readPE32PlusHeader(self, ms)
 
     }
     
+    return self;
+end
+
+
+function peinfo.readDirectory_Export(self)
+    print("==== readDirectory_Export ====")
+    local dirTable = self.PEHeader.Directories.ExportTable
+    if not dirTable then 
+        print("NO EXPORT TABLE")
+        return false 
+    end
+
+    -- turn the RVA Virtual address into a file address
+    local fileOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
+print("  fileOffset: ", fileOffset)
+
+    -- Setup a binstream and start reading
+    print("  binstream: ", self._data, self._size)
+    local ms = binstream(self._data, self._size)
+    ms:seek(fileOffset);
+
+    local res = {
+        Characteristics = ms:readUInt32();
+        TimeDateStamp = ms:readUInt32();
+        MajorVersion = ms:readUInt16();
+        MinorVersion = ms:readUInt16();
+        nName = ms:readUInt32();
+        nBase = ms:readUInt32();
+        NumberOfFunctions = ms:readUInt32();
+        NumberOfNames = ms:readUInt32();
+        AddressOfFunctions = ms:readUInt32();
+        AddressOfNames = ms:readUInt32();
+        AddressOfNameOrdinals = ms:readUInt32();
+    }
+
     return res;
+end
+
+function peinfo.readDirectory_Import(self)
+    print("==== readDirectory_Import ====")
+    local dirTable = self.PEHeader.Directories.ImportTable
+    if not dirTable then return false end
+
+    -- turn the RVA Virtual address into a file address
+    local fileOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
+
+    -- Setup a binstream and start reading
+    local ms = binstream(self._data, self._size)
+    ms:seek(fileOffset);
+
+    local res = {
+        OriginalFirstThunk = ms:readUInt32();   -- RVA to IMAGE_THUNK_DATA array
+        TimeDateStamp = ms:readUInt32();
+        ForwarderChain = ms:readUInt32();
+        Name1 = ms:readUInt32();                -- RVA, Name of the .dll or .exe
+        FirstThunk = ms:readUInt32();
+    }
+
+    -- turn the name into an actual name
+    local Name1Offset = self:fileOffsetFromRVA(res.Name1)
+    ms:seek(Name1Offset);
+    res.DllName = ms:readString();
+    print("DllName: ", res.DllName)
+
+    return res;
+end
+
+
+function peinfo.readDirectories(self)
+    self.Directories = self.Directories or {}
+    
+    self.Directories.Export = self:readDirectory_Export();
+    self.Directories.Import = self:readDirectory_Import();
+
 end
 
 local function stringFromBuff(buff, size)
@@ -369,13 +453,17 @@ function peinfo.parseData(self, ms)
     -- optional header is supposed to be, so we can 
     -- create a sub-stream for reading that section alone
     if IsPe32Header(pemagic) then
-        self.PEHeader = self:readPE32Header(ms);
+        self:readPE32Header(ms);
     elseif IsPe32PlusHeader(pemagic) then
-        self.PEHeader = self:readPE32PlusHeader(ms);
+        self:readPE32PlusHeader(ms);
     end
 
     -- Now offset should be positioned at the section table
     self:readSectionHeaders(ms)
+
+    -- Now that we have section information, we should
+    -- be able to read detailed directory information
+    self:readDirectories()
 
     return self
 end
