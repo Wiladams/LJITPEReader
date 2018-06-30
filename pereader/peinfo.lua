@@ -1,30 +1,23 @@
 --[[
-    Reference Material:
-    https://msdn.microsoft.com/library/windows/desktop/ms680547(v=vs.85).aspx
+    PE file format reader.
+    This reader will essentially 'decompress' all the information
+    in the PE file, and make all relevant content available
+    through a standard Lua table.
+
+    Typical usage on a Windows platform would be:
+
+    local mfile = mmap(filename);
+	local data = ffi.cast("uint8_t *", mfile:getPointer());
+
+	local peinfo = peinfo(data, mfile.size);
+
+    Once the peinfo object has been constructed, it will already 
+    contain the contents in an easily navigable form.
 ]]
 local ffi = require("ffi")
 
 local binstream = require("pereader.binstream")
 local enums = require("pereader.peenums")
-
-
-local IMAGE_DIRECTORY_ENTRY_EXPORT          = 0   -- Export Directory
-local IMAGE_DIRECTORY_ENTRY_IMPORT          = 1   -- Import Directory
-local IMAGE_DIRECTORY_ENTRY_RESOURCE        = 2   -- Resource Directory
-local IMAGE_DIRECTORY_ENTRY_EXCEPTION       = 3   -- Exception Directory
-local IMAGE_DIRECTORY_ENTRY_SECURITY        = 4   -- Security Directory
-local IMAGE_DIRECTORY_ENTRY_BASERELOC       = 5   -- Base Relocation Table
-local IMAGE_DIRECTORY_ENTRY_DEBUG           = 6   -- Debug Directory
---      IMAGE_DIRECTORY_ENTRY_COPYRIGHT       7   -- (X86 usage)
-local IMAGE_DIRECTORY_ENTRY_ARCHITECTURE    = 7   -- Architecture Specific Data
-local IMAGE_DIRECTORY_ENTRY_GLOBALPTR       = 8   -- RVA of GP
-local IMAGE_DIRECTORY_ENTRY_TLS             = 9   -- TLS Directory
-local IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG    = 10   -- Load Configuration Directory
-local IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT   = 11   -- Bound Import Directory in headers
-local IMAGE_DIRECTORY_ENTRY_IAT            = 12   -- Import Address Table
-local IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT   = 13   -- Delay Load Import Descriptors
-local IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR = 14   -- COM Runtime descriptor
-
 
 
 local peinfo = {}
@@ -102,7 +95,7 @@ function peinfo.GetEnclosingSectionHeader(self, rva)
 end
 
 function peinfo.fileOffsetFromRVA(self, rva)
-print("==== fileOffsetFromRVA: ", rva)
+--print("==== fileOffsetFromRVA: ", rva)
     local section = self:GetEnclosingSectionHeader( rva);
     if not section then return false; end
 
@@ -175,7 +168,8 @@ local function readDirectory(ms, id)
     return res;
 end
 
-
+-- List of directories in the order
+-- they show up in the file
 local dirNames = {
     "ExportTable",
     "ImportTable",
@@ -239,10 +233,12 @@ function peinfo.readPE32Header(self, ms)
     }
 
     -- Read directory index entries
+    -- Only save the ones that actually
+    -- have data in them
     self.PEHeader.Directories = {}
-    print("  READ DIRECTORIES ")
+    --print("  READ DIRECTORIES ")
     for i, name in ipairs(dirNames) do
-        print("dir offset: ", name, ms:tell()-startOff)
+        --print("dir offset: ", name, ms:tell()-startOff)
         local dir = readDirectory(ms);
         if dir.Size ~= 0 then
             self.PEHeader.Directories[name] = dir;
@@ -298,19 +294,7 @@ function peinfo.readPE32PlusHeader(self, ms)
         end
     end
 
---[[
-    print("==== readPE32PlusHeader ====")
-    print(string.format("     Linker Version:  %d.%d", self.PEHeader.MajorLinkerVersion, self.PEHeader.MinorLinkerVersion));
-    print("       Size of Code: ", self.PEHeader.SizeOfCode);
 
-    print("Image Base: ", self.PEHeader.ImageBase)
-    print("  Section Alignment: ", self.PEHeader.SectionAlignment)
-    print("     File Alignment: ", self.PEHeader.FileAlignment)
-    print("      Size of Image: ", self.PEHeader.SizeOfImage)
-    print("    Size of Headers: ", self.PEHeader.SizeOfHeaders)
-    print("       Loader Flags: ", self.PEHeader.LoaderFlags)
-    print("NumberOfRvaAndSizes: " , self.PEHeader.NumberOfRvaAndSizes)
---]]
 
     return self;
 end
@@ -370,6 +354,7 @@ end
 
 function peinfo.readDirectory_Import(self)
     print("==== readDirectory_Import ====")
+    self.Imports = {}
     local dirTable = self.PEHeader.Directories.ImportTable
     if not dirTable then return false end
 
@@ -384,36 +369,87 @@ function peinfo.readDirectory_Import(self)
     end
     
 
-	print("file offset: ", string.format("0x%x",importdescripptr));
+	--print("file offset: ", string.format("0x%x",importdescripptr));
 
      -- Setup a binstream and start reading
     local ms = binstream(self._data, self._size, 0, true)
     ms:seek(importdescripptr);
+	while true do
+        local res = {
+            OriginalFirstThunk  = ms:readUInt32();   -- RVA to IMAGE_THUNK_DATA array
+            TimeDateStamp       = ms:readUInt32();
+            ForwarderChain      = ms:readUInt32();
+            Name1               = ms:readUInt32();   -- RVA, Name of the .dll or .exe
+            FirstThunk          = ms:readUInt32();
+        }
 
-    local res = {
-        OriginalFirstThunk  = ms:readUInt32();   -- RVA to IMAGE_THUNK_DATA array
-        TimeDateStamp       = ms:readUInt32();
-        ForwarderChain      = ms:readUInt32();
-        Name1               = ms:readUInt32();   -- RVA, Name of the .dll or .exe
-        FirstThunk          = ms:readUInt32();
-    }
+        if (res.Name1 == 0 and res.OriginalFirstThunk == 0 and res.FirstThunk == 0) then 
+            break;
+        end
+--[[
+        print("== IMPORT ==")
+        print(string.format("OriginalFirstThunk: 0x%08x", res.OriginalFirstThunk))
+        print(string.format("     TimeDateStamp: 0x%08x", res.TimeDateStamp))
+        print(string.format("    ForwarderChain: 0x%08x", res.ForwarderChain))
+        print(string.format("             Name1: 0x%08x", res.Name1))
+        print(string.format("        FirstThunk: 0x%08x", res.FirstThunk))
+--]]
+        -- turn the name into an actual dll name
+        local Name1Offset = self:fileOffsetFromRVA(res.Name1)
+        if Name1Offset then
+            local ns = binstream(self._data, self._size, 0, true)
+            ns:seek(Name1Offset)
+            res.DllName = ns:readString();
+            --print("DllName: ", res.DllName)
+            self.Imports[res.DllName] = {};
+        end 
 
-    print(string.format("OriginalFirstThunk: 0x%08x", res.OriginalFirstThunk))
-    print(string.format("     TimeDateStamp: 0x%08x", res.TimeDateStamp))
-    print(string.format("    ForwarderChain: 0x%08x", res.ForwarderChain))
-    print(string.format("             Name1: 0x%08x", res.Name1))
-    print(string.format("        FirstThunk: 0x%08x", res.FirstThunk))
+        		-- Iterate over the invividual import entries
+		local thunkRVA = res.OriginalFirstThunk
+		local thunkIATRVA = res.FirstThunk
+        if thunkRVA == 0 then
+            thunkRVA = thunkIATRVA
+        end
 
-    -- turn the name into an actual name
-    print("                res.Name1: ", res.Name1)
-    local Name1Offset = self:fileOffsetFromRVA(res.Name1)
-    local ns = binstream(self._data, self._size, 0, true)
-    ns:seek(Name1Offset)
-    
-    if Name1Offset then
-     res.DllName = ns:readString();
-    print("DllName: ", res.DllName)
-    end 
+
+		if (thunkRVA ~= 0) then
+            -- fill in the rest of the data
+            local thunkOffset = self:fileOffsetFromRVA(thunkRVA);
+                if thunkOffset then
+                    local thunks = binstream(self._data, self._size, 0, true)
+                    thunks:seek(thunkOffset)
+
+                    --local thunkIATOffset = self:fileOffsetFromRVA(thunkIATRVA);
+                    --ms:seek(thunkIATOffset)
+                    --local thunkIATData = ms:readUInt32();
+
+      
+                    -- Read individual Import names or ordinals
+                    while (true) do
+                        local thunkPtr = thunks:readUInt32();
+
+                        if thunkPtr == 0 then
+                            break;
+                        end
+        
+                        if (false) then -- band(thunk.Data, IMAGE_ORDINAL_FLAG) then
+                        else
+                            local pOrdinalName = thunkPtr;
+                            pOrdinalNameOffset = self:fileOffsetFromRVA(pOrdinalName);
+                            local ns = binstream(self._data, self._size, 0, true)
+                            ns:seek(pOrdinalNameOffset)
+                            local hint = ns:readUInt16();
+                            local actualName = ns:readString();
+            
+                            --print(string.format("\t%s", actualName))
+                            table.insert(self.Imports[res.DllName], actualName);
+                    end
+                        
+                end
+            end
+		end
+		
+    end
 
     return res;
 end

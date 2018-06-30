@@ -36,20 +36,32 @@ local function printCOFF(reader)
 	--print(string.format("        Characteristics: 0x%04x", info.Characteristics));
 end
 
+--[[
+    print("==== readPE32PlusHeader ====")
+
+
+    print("      Size of Image: ", self.PEHeader.SizeOfImage)
+    print("    Size of Headers: ", self.PEHeader.SizeOfHeaders)
+    print("       Loader Flags: ", self.PEHeader.LoaderFlags)
+
+--]]
+
 local function printPEHeader(browser)
 	local info = browser.PEHeader
 
 	print("==== PE Header ====")
 	print(string.format("                   Magic: 0x%04X", info.Magic))
-	print(string.format("    Major Linker Version: 0x%02x", info.MajorLinkerVersion))
-	print(string.format("    Minor Linker Version: 0x%02x", info.MinorLinkerVersion))
+    print(string.format("          Linker Version:  %d.%d", info.MajorLinkerVersion, info.MinorLinkerVersion));
 	print(string.format("            Size Of Code: 0x%08x", info.SizeOfCode))
-	print(string.format("  Address of Entry Point: 0x%08X", info.AddressOfEntryPoint))
+    print("              Image Base: ", info.ImageBase)
+    print("  Section Alignment: ", info.SectionAlignment)
+	print("     File Alignment: ", info.FileAlignment)
+		print(string.format("  Address of Entry Point: 0x%08X", info.AddressOfEntryPoint))
 	print(string.format("            Base of Code: 0x%08X", info.BaseOfCode))
 	if info.BaseOfData then
 		print(string.format("            Base of Data: 0x%08X", info.BaseOfData))
 	end
-	--print(string.format("              Image Base: 0x%08X", info.ImageBase))
+
 	print(string.format("Number of Rvas and Sizes: 0x%08X (%d)", info.NumberOfRvaAndSizes, info.NumberOfRvaAndSizes))
 end
 
@@ -96,37 +108,15 @@ end
 local function printImports(reader)
 		print("===== IMPORTS =====")
 
+		for k,v in pairs(reader.Imports) do
+			print(k)
+			for i, name in ipairs(v) do
+				print(string.format("    %s",name))
+			end
+		end
 --[[
-
-	-- Get the actual address of the import descriptor
-	local importdescripptr = reader:GetPtrFromRVA(importsStartRVA)
-	--local importdescrip = IMAGE_IMPORT_DESCRIPTOR(importdescripptr, importsSize)
-	local ms = binstream(importdescripptr, importsSize)
-
-
 	-- Iterate over import descriptors
 	while true do
-		local importdescrip = {
-			ImportLookupTable = ms:readUInt32();
-			TimeDateStamp = ms:readUInt32();
-			ForwarderChain = ms:readUInt32();
-			Name = ms:readUInt32();					-- RVA
-			ImportAddressTable = ms:readUInt32();	-- RVA
-		}
-		if importdescrip.TimeDateStamp == 0 and importdescrip.Name == 0 then
-			break
-		end
-
-		local nameptr = reader:GetPtrFromRVA(importdescrip.Name)
-		local importname = ffi.string(nameptr)
-		print("Import Name: ", importname);
-
-		--print(string.format("Original First Thunk: 0x08%X", importdescrip:get_OriginalFirstThunk()))
-		--print(string.format("TimeStamp: 0x08%X", importdescrip:get_TimeDateStamp()))
-		--print(string.format("Forwarder Chain: 0x08%X", importdescrip:get_ForwarderChain()))
-		--print(string.format("Name: 0x08%X", importdescrip:get_Name()))
-		--print(string.format("First Thunk: 0x08%X", importdescrip:get_FirstThunk()))
-
 		-- Iterate over the invividual import entries
 		local thunk = importdescrip.ImportLookupTable
 		local thunkIAT = importdescrip.ImportAddressTable
@@ -171,14 +161,15 @@ local function printImports(reader)
 		end
 --]]
 
-		--importdescrip.DataPtr = importdescrip.DataPtr + importdescrip.ClassSize
-	--end
 end
 
 
 local function main()
 	local mfile = mmap(filename);
---print("MFILE: ", mfile)
+	if not mfile then 
+		print("Error trying to map: ", filename)
+	end
+
 	local data = ffi.cast("uint8_t *", mfile:getPointer());
 
 	local peinfo = peinfo(data, mfile.size);
