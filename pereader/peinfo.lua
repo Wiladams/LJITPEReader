@@ -92,7 +92,7 @@ function peinfo.GetEnclosingSectionHeader(self, rva)
         -- Is the RVA within this section?
         --print(secname, section.VirtualAddress, section.VirtualAddress+section.VirtualSize)
         local pos = rva - section.VirtualAddress;
-        if pos > 0 and pos < section.VirtualSize then
+        if pos >= 0 and pos < section.VirtualSize then
             -- return section, and the calculated fileoffset of the rva
             return section, pos 
         end
@@ -103,9 +103,12 @@ end
 
 function peinfo.fileOffsetFromRVA(self, rva)
 print("==== fileOffsetFromRVA: ", rva)
-	local section, offset = self:GetEnclosingSectionHeader( rva);
-print(section.name)
-    return offset or false
+    local section = self:GetEnclosingSectionHeader( rva);
+    if not section then return false; end
+
+    local fileOffset = rva - section.VirtualAddress + section.PointerToRawData;
+
+    return fileOffset
 end
 
 
@@ -173,8 +176,29 @@ local function readDirectory(ms, id)
 end
 
 
+local dirNames = {
+    "ExportTable",
+    "ImportTable",
+    "ResourceTable",
+    "ExceptionTable",
+    "CertificateTable",
+    "BaseRelocationTable",
+    "Debug",
+    "Architecture",
+    "GlobalPtr",
+    "TLSTable",
+    "LoadConfigTable",
+    "BoundImport",
+    "IAT",
+    "DelayImportDescriptor",
+    "CLRRuntimeHeader",
+    "Reserved"
+}
 
 function peinfo.readPE32Header(self, ms)
+    print("==== readPE32Header ====")
+    local startOff = ms:tell();
+
     self.PEHeader = {
 		-- Fields common to PE32 and PE+
 		Magic = ms:readUInt16();	-- , default = 0x10b
@@ -212,32 +236,18 @@ function peinfo.readPE32Header(self, ms)
 		SizeOfHeapCommit = ms:readUInt32();
 		LoaderFlags = ms:readUInt32();
 		NumberOfRvaAndSizes = ms:readUInt32();
-
-
-
-        -- Data directories
-        Directories = {
-		    ExportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXPORT);			-- .edata  exports
-		    ImportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IMPORT);			-- .idata  imports
-		    ResourceTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_RESOURCE);			-- .rsrc   resource table
-		    ExceptionTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXCEPTION);			-- .pdata  exceptions table
-		    CertificateTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_SECURITY);		--         attribute certificate table, fileoffset, NOT RVA
-            BaseRelocationTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BASERELOC);	-- .reloc  base relocation table
-        
-		    Debug = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DEBUG);					-- .debug  debug data starting address
-		    Architecture = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_ARCHITECTURE);			-- architecture, reserved
-		    GlobalPtr = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_GLOBALPTR);				-- global pointer
-		    TLSTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_TLS);				-- .tls    Thread local storage
-		    LoadConfigTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG);		-- load configuration structure
-		    BoundImport = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT);			-- bound import table
-		    IAT = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IAT);					-- import address table
-		    DelayImportDescriptor = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT);	-- delay import descriptor
-		    CLRRuntimeHeader = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR);		-- .cormeta   CLR runtime header address
-		    Reserved = readDirectory(ms);				-- Reserved, must be zero
-        }
-
     }
-    
+
+    -- Read directory index entries
+    self.PEHeader.Directories = {}
+    print("  READ DIRECTORIES ")
+    for i, name in ipairs(dirNames) do
+        print("dir offset: ", name, ms:tell()-startOff)
+        local dir = readDirectory(ms);
+        if dir.Size ~= 0 then
+            self.PEHeader.Directories[name] = dir;
+        end
+    end
 
     return self;
 end
@@ -277,30 +287,31 @@ function peinfo.readPE32PlusHeader(self, ms)
 		SizeOfHeapCommit = ms:readUInt64();				-- size difference
 		LoaderFlags = ms:readUInt32();
 		NumberOfRvaAndSizes = ms:readUInt32();
-
-        -- Data directories
-        Directories = {
-            ExportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXPORT);			-- .edata  exports
-            ImportTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IMPORT);			-- .idata  imports
-            ResourceTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_RESOURCE);			-- .rsrc   resource table
-            ExceptionTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_EXCEPTION);			-- .pdata  exceptions table
-            CertificateTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_SECURITY);		--         attribute certificate table, fileoffset, NOT RVA
-            BaseRelocationTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BASERELOC);	-- .reloc  base relocation table
-                
-            Debug = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DEBUG);					-- .debug  debug data starting address
-            Architecture = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_ARCHITECTURE);			-- architecture, reserved
-            GlobalPtr = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_GLOBALPTR);				-- global pointer
-            TLSTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_TLS);				-- .tls    Thread local storage
-            LoadConfigTable = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG);		-- load configuration structure
-            BoundImport = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT);			-- bound import table
-            IAT = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_IAT);					-- import address table
-            DelayImportDescriptor = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT);	-- delay import descriptor
-            CLRRuntimeHeader = readDirectory(ms, IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR);		-- .cormeta   CLR runtime header address
-            Reserved = readDirectory(ms);				-- Reserved, must be zero
-        };
-
     }
-    
+
+    -- Read directory index entries
+    self.PEHeader.Directories = {}
+    for i, name in ipairs(dirNames) do
+        local dir = readDirectory(ms);
+        if dir.Size ~= 0 then
+            self.PEHeader.Directories[name] = dir;
+        end
+    end
+
+--[[
+    print("==== readPE32PlusHeader ====")
+    print(string.format("     Linker Version:  %d.%d", self.PEHeader.MajorLinkerVersion, self.PEHeader.MinorLinkerVersion));
+    print("       Size of Code: ", self.PEHeader.SizeOfCode);
+
+    print("Image Base: ", self.PEHeader.ImageBase)
+    print("  Section Alignment: ", self.PEHeader.SectionAlignment)
+    print("     File Alignment: ", self.PEHeader.FileAlignment)
+    print("      Size of Image: ", self.PEHeader.SizeOfImage)
+    print("    Size of Headers: ", self.PEHeader.SizeOfHeaders)
+    print("       Loader Flags: ", self.PEHeader.LoaderFlags)
+    print("NumberOfRvaAndSizes: " , self.PEHeader.NumberOfRvaAndSizes)
+--]]
+
     return self;
 end
 
@@ -322,13 +333,13 @@ function peinfo.readDirectory_Export(self)
     -- We use the directory entry to lookup the actual export table.
     -- We need to turn the VirtualAddress into an actual file offset
     print(string.format("  dirTable.VirtualAddress: 0x%x", dirTable.VirtualAddress))
-    local fileOffset = tonumber(self:fileOffsetFromRVA(dirTable.VirtualAddress))
+    local fileOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
     print(string.format("  fileOffset: 0x%x", fileOffset))
 
     -- We now know where the actual export table exists, so 
     -- create a binary stream, and position it at the offset
-    print("   binstream: ", self._data, self._size)
-    local ms = binstream(self._data, tonumber(self._size))
+    --print("   binstream: ", self._data, self._size)
+    local ms = binstream(self._data, self._size, 0, true)
     ms:seek(fileOffset);
 
     -- We are now in position to read the actual export table data
@@ -362,13 +373,22 @@ function peinfo.readDirectory_Import(self)
     local dirTable = self.PEHeader.Directories.ImportTable
     if not dirTable then return false end
 
-    -- turn the RVA Virtual address into a file address
-print("  dirTable.VirtualAddress: ", dirTable.VirtualAddress)
-    local fileOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
-print("               fileOffset: ", fileOffset)
-    -- Setup a binstream and start reading
-    local ms = binstream(self._data, self._size)
-    ms:seek(fileOffset);
+    -- Get section import directory is in
+    local importsStartRVA = dirTable.VirtualAddress
+	local importsSize = dirTable.Size
+	local importdescripptr = self:fileOffsetFromRVA(dirTable.VirtualAddress)
+
+	if not importdescripptr then
+		print("No section found for import directory")
+		return
+    end
+    
+
+	print("file offset: ", string.format("0x%x",importdescripptr));
+
+     -- Setup a binstream and start reading
+    local ms = binstream(self._data, self._size, 0, true)
+    ms:seek(importdescripptr);
 
     local res = {
         OriginalFirstThunk  = ms:readUInt32();   -- RVA to IMAGE_THUNK_DATA array
@@ -378,12 +398,20 @@ print("               fileOffset: ", fileOffset)
         FirstThunk          = ms:readUInt32();
     }
 
+    print(string.format("OriginalFirstThunk: 0x%08x", res.OriginalFirstThunk))
+    print(string.format("     TimeDateStamp: 0x%08x", res.TimeDateStamp))
+    print(string.format("    ForwarderChain: 0x%08x", res.ForwarderChain))
+    print(string.format("             Name1: 0x%08x", res.Name1))
+    print(string.format("        FirstThunk: 0x%08x", res.FirstThunk))
+
     -- turn the name into an actual name
     print("                res.Name1: ", res.Name1)
     local Name1Offset = self:fileOffsetFromRVA(res.Name1)
+    local ns = binstream(self._data, self._size, 0, true)
+    ns:seek(Name1Offset)
+    
     if Name1Offset then
-    ms:seek(Name1Offset);
-    res.DllName = ms:readString();
+     res.DllName = ns:readString();
     print("DllName: ", res.DllName)
     end 
 
@@ -434,7 +462,7 @@ function peinfo.readSectionHeaders(self, ms)
 		self.Sections[sec.Name] = sec
 	end
 
-	return sections
+	return self
 end
 
 function peinfo.parseData(self, ms)

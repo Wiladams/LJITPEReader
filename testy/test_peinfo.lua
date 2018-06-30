@@ -49,8 +49,8 @@ local function printPEHeader(browser)
 	if info.BaseOfData then
 		print(string.format("            Base of Data: 0x%08X", info.BaseOfData))
 	end
-	print(string.format("              Image Base: 0x%08X", info.ImageBase))
-	print(string.format("Number of Rvas and Sizes: 0x%08X", info.NumberOfRvaAndSizes))
+	--print(string.format("              Image Base: 0x%08X", info.ImageBase))
+	print(string.format("Number of Rvas and Sizes: 0x%08X (%d)", info.NumberOfRvaAndSizes, info.NumberOfRvaAndSizes))
 end
 
 
@@ -59,18 +59,20 @@ end
 local function printDirectoryEntries(reader, dirs)
 	local dirs = reader.PEHeader.Directories
 	print("==== Directory Entries ====")
+	print(string.format("%20s   %10s    %12s  %s",
+		"name", "location", "size (bytes)", "section"))
 	for name,dir in pairs(dirs) do
 		--print(name, dir)
 		local vaddr = dir.VirtualAddress
-		print(string.format("Name: %s", name));
-		print(string.format("  Address: 0x%08X", vaddr));
-		print(string.format("     Size: %d", dir.Size))
+		local sectionName = "UNKNOWN"
 		if vaddr > 0 then
 			local sec = reader:GetEnclosingSectionHeader(vaddr)
 			if sec then
-			    print("  Section: ", sec.Name)
+				sectionName = sec.Name
 			end
 		end
+		print(string.format("%20s   0x%08X    0x%x (%d)   %s", 
+			name, vaddr, dir.Size, dir.Size, sectionName))
 	end
 end
 
@@ -78,9 +80,9 @@ local function printSectionHeaders(reader)
 	print("===== SECTIONS =====")
 	for name,section in pairs(reader.Sections) do
 		print("Name: ", name)
-		print(string.format("            Virtual Size: 0x%08X", section.VirtualSize))
+		print(string.format("            Virtual Size: %d", section.VirtualSize))
 		print(string.format("         Virtual Address: 0x%08X", section.VirtualAddress))
-		print(string.format("        Size of Raw Data: 0x%08X", section.SizeOfRawData))
+		print(string.format("        Size of Raw Data: %d", section.SizeOfRawData))
 		print(string.format("     Pointer to Raw Data: 0x%08X", section.PointerToRawData))
 		print(string.format("  Pointer to Relocations: 0x%08X", section.PointerToRelocations))
 		print(string.format("  Pointer To Linenumbers: 0x%08X", section.PointerToLinenumbers))
@@ -92,26 +94,9 @@ local function printSectionHeaders(reader)
 end
 
 local function printImports(reader)
---[[
 		print("===== IMPORTS =====")
 
-	local importdirref = reader.PEHeader.Directories.Import
-
-	if not importdirref then 
-		print("   NO Imports")
-		return 
-	end
-
-	-- Get the section the import directory is in
-	local importsStartRVA = importdirref.VirtualAddress
-	local importsSize = importdirref.Size
-	local section = reader:GetEnclosingSectionHeader(importsStartRVA)
-	if not section then
-		print("No section found for import directory")
-		return
-	end
-
-	print("Import Section: ", section.Name);
+--[[
 
 	-- Get the actual address of the import descriptor
 	local importdescripptr = reader:GetPtrFromRVA(importsStartRVA)

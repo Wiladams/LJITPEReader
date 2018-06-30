@@ -141,9 +141,14 @@ end
 
 function tt_memstream.readString(self, n)
     --if n < 1 then return false end
-
-    local str = ffi.string(self.data+self.cursor, n)
-    self.cursor = self.cursor + n;
+    local str = nil;
+    if not n then
+        str = ffi.string(self.data+self.cursor)
+        self.cursor = self.cursor + #str + 1;
+    else
+        str = ffi.string(self.data+self.cursor, n)
+        self.cursor = self.cursor + n;
+    end
 
     return str;
 end
@@ -188,7 +193,28 @@ function tt_memstream.readInt64(self)
 end
 
 function tt_memstream.readUInt64(self)
-    return tonumber(ffi.cast('uint64_t', self:read(8)))
+    local v = ffi.cast("uint64_t", 0);
+    local i = 0;
+--print("==== readUInt64 ====")
+    if self.bigend then
+        while  (i < 8) do
+            v = bor(lshift(v, 8), self:read8());
+            i = i + 1;
+        end 
+    else
+        while  (i < 8) do
+            local byte = ffi.cast("uint64_t",self:read8());
+            local shifted = lshift(byte, 8*i)
+            --v = v + shifted
+            v = bor(v, lshift(byte, 8*i));
+            --print(v)
+            i = i + 1;
+        end 
+    end
+
+    return v;
+
+    --return ffi.cast('uint64_t', self:read(8))
 end
 
 
