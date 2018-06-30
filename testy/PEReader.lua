@@ -1,4 +1,12 @@
+--[[
+	this file represents the original attempt to creating 
+	the PE Reader.  This method uses data structures, each 
+	containing its own serialization code.
 
+	This approach was abandoned in favor of using a binary 
+	stream reader as that is easier to maintain and automatically
+	increment offsets.
+]]
 
 local ffi = require "ffi"
 
