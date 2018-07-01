@@ -34,6 +34,7 @@ local function printCOFF(reader)
 	print(string.format("        Characteristics: 0x%04x  (%s)", info.Characteristics,
 		enum.bitValues(peenums.Characteristics, info.Characteristics, 32)));
 	--print(string.format("        Characteristics: 0x%04x", info.Characteristics));
+	print("---------------------")
 end
 
 --[[
@@ -63,6 +64,7 @@ local function printPEHeader(browser)
 	end
 
 	print(string.format("Number of Rvas and Sizes: 0x%08X (%d)", info.NumberOfRvaAndSizes, info.NumberOfRvaAndSizes))
+	print("---------------------")
 end
 
 
@@ -83,9 +85,10 @@ local function printDirectoryEntries(reader, dirs)
 				sectionName = sec.Name
 			end
 		end
-		print(string.format("%20s   0x%08X    0x%x (%d)   %s", 
-			name, vaddr, dir.Size, dir.Size, sectionName))
+		print(string.format("%20s   0x%08X    %12s   %s", 
+			name, vaddr, string.format("0x%x (%d)", dir.Size, dir.Size), sectionName))
 	end
+	print("---------------------")
 end
 
 local function printSectionHeaders(reader)
@@ -103,64 +106,33 @@ local function printSectionHeaders(reader)
 		print(string.format("         Characteristics: 0x%08X  (%s)", section.Characteristics, 
 			enum.bitValues(peenums.SectionCharacteristics, section.Characteristics)))
 	end
+	print("---------------------")
 end
 
 local function printImports(reader)
-		print("===== IMPORTS =====")
+	print("===== IMPORTS =====")
 
-		for k,v in pairs(reader.Imports) do
-			print(k)
-			for i, name in ipairs(v) do
-				print(string.format("    %s",name))
-			end
+	for k,v in pairs(reader.Imports) do
+		print(k)
+		for i, name in ipairs(v) do
+			print(string.format("    %s",name))
 		end
---[[
-	-- Iterate over import descriptors
-	while true do
-		-- Iterate over the invividual import entries
-		local thunk = importdescrip.ImportLookupTable
-		local thunkIAT = importdescrip.ImportAddressTable
+	end
+	print("---------------------")
+end
 
-		if thunk == 0 then
-			-- Yes!  Must have a non-zero FirstThunk field then
-			thunk = thunkIAT;
+local function printExports(reader)
+	print("===== EXPORTS =====")
+	if (not reader.Exports) then
+		print("  NO EXPORTS")
+		return ;
+	end
 
-			if (thunk == 0) then
-				return ;
-			end
-		end
-
-		thunk = reader:GetPtrFromRVA(thunk);
-		if not thunk then
-			return
-		end
---]]
---[[
-		thunkIAT = reader:GetPtrFromRVA(thunkIAT);
-		thunk = IMAGE_THUNK_DATA(thunk, importdescrip.ClassSize);
-		thunkIAT = IMAGE_THUNK_DATA(thunkIAT, importdescrip.ClassSize);
-
-		while (true) do
-			local thunkPtr = thunk.Data
-			if thunkPtr == 0 then
-				break;
-			end
-
-			if (false) then -- band(thunk.Data, IMAGE_ORDINAL_FLAG) then
-			else
-				local pOrdinalName = thunkPtr;
-				pOrdinalName = reader:GetPtrFromRVA(pOrdinalName);
-				pOrdinalName = IMAGE_IMPORT_BY_NAME(pOrdinalName, importdescrip.ClassSize)
-				local actualName = pOrdinalName.Name
-				actualName = ffi.string(actualName)
-				print(string.format("\t%s", actualName))
-			end
-
-			thunk.DataPtr = thunk.DataPtr + thunk.ClassSize;
-			thunkIAT.DataPtr = thunkIAT.DataPtr + thunkIAT.ClassSize;
-		end
---]]
-
+	print("Module Name: ", reader.ModuleName)
+	for i, name in ipairs(reader.Exports) do
+		print(name)
+	end
+	print("---------------------")
 end
 
 
@@ -181,6 +153,7 @@ local function main()
 	printDirectoryEntries(peinfo)
 	printSectionHeaders(peinfo)
 	printImports(peinfo)
+	printExports(peinfo)
 end
 
 main()

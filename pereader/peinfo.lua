@@ -313,17 +313,20 @@ function peinfo.readDirectory_Export(self)
         return false 
     end
 
+    self.Exports = {}
+
     -- If the virtual address is zero, then we don't actually
     -- have any exports
     if dirTable.VirtualAddress == 0 then
+        print("  No Virtual Address")
         return false;
     end
 
     -- We use the directory entry to lookup the actual export table.
     -- We need to turn the VirtualAddress into an actual file offset
-    print(string.format("  dirTable.VirtualAddress: 0x%x", dirTable.VirtualAddress))
+    --print(string.format("  dirTable.VirtualAddress: 0x%x", dirTable.VirtualAddress))
     local fileOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
-    print(string.format("  fileOffset: 0x%x", fileOffset))
+    --print(string.format("  fileOffset: 0x%x", fileOffset))
 
     -- We now know where the actual export table exists, so 
     -- create a binary stream, and position it at the offset
@@ -348,19 +351,58 @@ function peinfo.readDirectory_Export(self)
         AddressOfNameOrdinals = ms:readUInt32();
     }
 
+    -- Get the internal name of the module
+    local nNameOffset = self:fileOffsetFromRVA(res.nName)
+    if nNameOffset then
+        -- use a separate stream to read the string so we don't
+        -- upset the positioning on the one that's reading
+        -- the import descriptors
+        local ns = binstream(self._data, self._size, 0, true)
+        ns:seek(nNameOffset)
+        self.ModuleName = ns:readString();
+        --print("Module Name: ", res.ModuleName)
+    end 
+
+--[[
     print("        Export Flags: ", res.Characteristics)
+    print("               nName: ", string.format("0x%X",res.nName))
+    print("         Module Name: ", self.ModuleName)
     print("        Ordinal Base: ", res.nBase)
     print("   NumberOfFunctions: ", res.NumberOfFunctions);
     print("       NumberOfNames: ", res.NumberOfNames);
     print("  AddressOfFunctions: ", res.AddressOfFunctions);
     print("      AddressOfNames: ", res.AddressOfNames);
+--]]
+
+    -- Get the names if the Names array exists
+    if res.NumberOfNames > 0 then
+        local NamesArrayOffset = self:fileOffsetFromRVA(res.AddressOfNames)
+        local NamesArrayStream = binstream(self._data, self._size, 0, true);
+        NamesArrayStream:seek(NamesArrayOffset);
+
+        for i=1, res.NumberOfNames do
+            local nameRVA = NamesArrayStream:readUInt32();
+--print("nameRVA: ", nameRVA)
+            local nameOffset = self:fileOffsetFromRVA(nameRVA)
+
+            -- create a stream pointing at the specific name
+            local nameStream = binstream(self._data, self._size, 0, true);
+            nameStream:seek(nameOffset);
+            local name = nameStream:readString();
+--print("Export: ", name)
+            table.insert(self.Exports, name)
+            --self.Exports[name] = true;    -- put extended info in here, like ordinal, and func ptr
+        end
+    end
+
+
     return res;
 end
 
 local IMAGE_ORDINAL_FLAG32 = 0x80000000
 
 function peinfo.readDirectory_Import(self)
-    print("==== readDirectory_Import ====")
+    --print("==== readDirectory_Import ====")
     self.Imports = {}
     local dirTable = self.PEHeader.Directories.ImportTable
     if not dirTable then return false end
@@ -394,7 +436,7 @@ function peinfo.readDirectory_Import(self)
             break;
         end
 
----[[
+--[[
         print("== IMPORT ==")
         print(string.format("OriginalFirstThunk: 0x%08x (0x%08x)", res.OriginalFirstThunk, self:fileOffsetFromRVA(res.OriginalFirstThunk)))
         print(string.format("     TimeDateStamp: 0x%08x", res.TimeDateStamp))
@@ -413,7 +455,7 @@ function peinfo.readDirectory_Import(self)
             local ns = binstream(self._data, self._size, 0, true)
             ns:seek(Name1Offset)
             res.DllName = ns:readString();
-            print("DllName: ", res.DllName)
+            --print("DllName: ", res.DllName)
             self.Imports[res.DllName] = {};
         end 
 
@@ -429,7 +471,7 @@ function peinfo.readDirectory_Import(self)
 
 		if (thunkRVA ~= 0) then
             local ThunkArrayOffset = self:fileOffsetFromRVA(thunkRVA);
-print(string.format("ThunkRVA: 0x%08X (0x%08X)", thunkRVA, ThunkArrayOffset))
+--print(string.format("ThunkRVA: 0x%08X (0x%08X)", thunkRVA, ThunkArrayOffset))
             --if ImportNameTableOffset then
                 -- this will point to an array of IMAGE_THUNK_DATA objects
                 -- so create a separate stream to read them
@@ -469,7 +511,7 @@ print(string.format("ThunkRVA: 0x%08X (0x%08X)", thunkRVA, ThunkArrayOffset))
                         local hint = HintNameStream:readUInt16();
                         local actualName = HintNameStream:readString();
 
-                        print(string.format("\t0x%04x %s", hint, actualName))
+                        --print(string.format("\t0x%04x %s", hint, actualName))
                         table.insert(self.Imports[res.DllName], actualName);
                     --end
                 end
