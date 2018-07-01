@@ -15,6 +15,8 @@
     contain the contents in an easily navigable form.
 ]]
 local ffi = require("ffi")
+local bit = require("bit")
+local band = bit.band;
 
 local binstream = require("pereader.binstream")
 local enums = require("pereader.peenums")
@@ -249,7 +251,10 @@ function peinfo.readPE32Header(self, ms)
 end
 
 function peinfo.readPE32PlusHeader(self, ms)
+    self.isPE32Plus = true;
+
     self.PEHeader = {
+
 		-- Fields common with PE32
 		Magic = ms:readUInt16();	-- , default = 0x20b
 		MajorLinkerVersion = ms:readUInt8();
@@ -352,6 +357,8 @@ function peinfo.readDirectory_Export(self)
     return res;
 end
 
+local IMAGE_ORDINAL_FLAG32 = 0x80000000
+
 function peinfo.readDirectory_Import(self)
     print("==== readDirectory_Import ====")
     self.Imports = {}
@@ -372,39 +379,47 @@ function peinfo.readDirectory_Import(self)
 	--print("file offset: ", string.format("0x%x",importdescripptr));
 
      -- Setup a binstream and start reading
-    local ms = binstream(self._data, self._size, 0, true)
-    ms:seek(importdescripptr);
+    local ImageImportDescriptorStream = binstream(self._data, self._size, 0, true)
+    ImageImportDescriptorStream:seek(importdescripptr);
 	while true do
         local res = {
-            OriginalFirstThunk  = ms:readUInt32();   -- RVA to IMAGE_THUNK_DATA array
-            TimeDateStamp       = ms:readUInt32();
-            ForwarderChain      = ms:readUInt32();
-            Name1               = ms:readUInt32();   -- RVA, Name of the .dll or .exe
-            FirstThunk          = ms:readUInt32();
+            OriginalFirstThunk  = ImageImportDescriptorStream:readUInt32();   -- RVA to IMAGE_THUNK_DATA array
+            TimeDateStamp       = ImageImportDescriptorStream:readUInt32();
+            ForwarderChain      = ImageImportDescriptorStream:readUInt32();
+            Name1               = ImageImportDescriptorStream:readUInt32();   -- RVA, Name of the .dll or .exe
+            FirstThunk          = ImageImportDescriptorStream:readUInt32();
         }
 
         if (res.Name1 == 0 and res.OriginalFirstThunk == 0 and res.FirstThunk == 0) then 
             break;
         end
---[[
+
+---[[
         print("== IMPORT ==")
-        print(string.format("OriginalFirstThunk: 0x%08x", res.OriginalFirstThunk))
+        print(string.format("OriginalFirstThunk: 0x%08x (0x%08x)", res.OriginalFirstThunk, self:fileOffsetFromRVA(res.OriginalFirstThunk)))
         print(string.format("     TimeDateStamp: 0x%08x", res.TimeDateStamp))
         print(string.format("    ForwarderChain: 0x%08x", res.ForwarderChain))
-        print(string.format("             Name1: 0x%08x", res.Name1))
+        print(string.format("             Name1: 0x%08x (0x%08x)", res.Name1, self:fileOffsetFromRVA(res.Name1)))
         print(string.format("        FirstThunk: 0x%08x", res.FirstThunk))
 --]]
-        -- turn the name into an actual dll name
+        -- The .Name1 field contains an RVA which points to
+        -- the actual string name of the .dll
+        -- So, get the file offset, and read the string
         local Name1Offset = self:fileOffsetFromRVA(res.Name1)
         if Name1Offset then
+            -- use a separate stream to read the string so we don't
+            -- upset the positioning on the one that's reading
+            -- the import descriptors
             local ns = binstream(self._data, self._size, 0, true)
             ns:seek(Name1Offset)
             res.DllName = ns:readString();
-            --print("DllName: ", res.DllName)
+            print("DllName: ", res.DllName)
             self.Imports[res.DllName] = {};
         end 
 
-        		-- Iterate over the invividual import entries
+        -- Iterate over the invividual import entries
+        -- The thunk points to an array of IMAGE_THUNK_DATA structures
+        -- which is comprised of a single uint32_t
 		local thunkRVA = res.OriginalFirstThunk
 		local thunkIATRVA = res.FirstThunk
         if thunkRVA == 0 then
@@ -413,42 +428,54 @@ function peinfo.readDirectory_Import(self)
 
 
 		if (thunkRVA ~= 0) then
-            -- fill in the rest of the data
-            local thunkOffset = self:fileOffsetFromRVA(thunkRVA);
-                if thunkOffset then
-                    local thunks = binstream(self._data, self._size, 0, true)
-                    thunks:seek(thunkOffset)
+            local ThunkArrayOffset = self:fileOffsetFromRVA(thunkRVA);
+print(string.format("ThunkRVA: 0x%08X (0x%08X)", thunkRVA, ThunkArrayOffset))
+            --if ImportNameTableOffset then
+                -- this will point to an array of IMAGE_THUNK_DATA objects
+                -- so create a separate stream to read them
+                local ThunkArrayStream = binstream(self._data, self._size, 0, true)
+                ThunkArrayStream:seek(ThunkArrayOffset)
 
-                    --local thunkIATOffset = self:fileOffsetFromRVA(thunkIATRVA);
-                    --ms:seek(thunkIATOffset)
-                    --local thunkIATData = ms:readUInt32();
+                --local thunkIATOffset = self:fileOffsetFromRVA(thunkIATRVA);
+                --ms:seek(thunkIATOffset)
+                --local thunkIATData = ms:readUInt32();
 
-      
-                    -- Read individual Import names or ordinals
-                    while (true) do
-                        local thunkPtr = thunks:readUInt32();
-
-                        if thunkPtr == 0 then
-                            break;
-                        end
-        
-                        if (false) then -- band(thunk.Data, IMAGE_ORDINAL_FLAG) then
-                        else
-                            local pOrdinalName = thunkPtr;
-                            pOrdinalNameOffset = self:fileOffsetFromRVA(pOrdinalName);
-                            local ns = binstream(self._data, self._size, 0, true)
-                            ns:seek(pOrdinalNameOffset)
-                            local hint = ns:readUInt16();
-                            local actualName = ns:readString();
-            
-                            --print(string.format("\t%s", actualName))
-                            table.insert(self.Imports[res.DllName], actualName);
+                -- Read individual Import names or ordinals
+                while (true) do
+                    -- the thunkPtr is an RVA pointing to the beginning
+                    -- of an array of 
+                    local ThunkDataRVA = false;
+                    local pos = ThunkArrayStream:tell();
+                    if self.isPE32Plus then
+                        --print("PE32Plus")
+                        ThunkDataRVA = ThunkArrayStream:readUInt64();
+                    else
+                        ThunkDataRVA = ThunkArrayStream:readUInt32();
                     end
-                        
+                    --print("ThunkDataRVA: ", string.format("x%08X", pos), ThunkDataRVA)
+                    --print(string.format("ThunkDataRVA: 0x%08X (0x%08X)", ThunkDataRVA, self:fileOffsetFromRVA(ThunkDataRVA)))
+                    if ThunkDataRVA == 0 then
+                        break;
+                    end
+                    local ThunkDataOffset = self:fileOffsetFromRVA(ThunkDataRVA)
+
+                    --if band(ImportByNameTableOffset, IMAGE_ORDINAL_FLAG32) > 0 then
+                    --    print("** IMPORT ORDINAL!! **")
+                    --else
+                        -- Read the entries in the nametable
+                        local HintNameStream = binstream(self._data, self._size, 0, true);
+                        HintNameStream:seek(ThunkDataOffset)
+
+                        local hint = HintNameStream:readUInt16();
+                        local actualName = HintNameStream:readString();
+
+                        print(string.format("\t0x%04x %s", hint, actualName))
+                        table.insert(self.Imports[res.DllName], actualName);
+                    --end
                 end
-            end
-		end
-		
+            --end
+
+        end
     end
 
     return res;

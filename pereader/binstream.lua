@@ -77,9 +77,14 @@ end
 -- move the cursor ahead by the amount
 -- specified in the offset
  function tt_memstream.skip(self, offset)
+    --print("SKIP: ", offset)
      return self:seek(self.cursor + offset);
  end
  
+function tt_memstream.skipToEven(self)
+    self:skip(self.cursor % 2);
+end
+
 -- get 8 bits, and don't advance the cursor
 function tt_memstream.peek8(self)
     if (self.cursor >= self.size) then
@@ -193,7 +198,8 @@ function tt_memstream.readInt64(self)
 end
 
 function tt_memstream.readUInt64(self)
-    local v = ffi.cast("uint64_t", 0);
+    local v = 0ULL;
+    --ffi.cast("uint64_t", 0);
     local i = 0;
 --print("==== readUInt64 ====")
     if self.bigend then
@@ -202,6 +208,7 @@ function tt_memstream.readUInt64(self)
             i = i + 1;
         end 
     else
+        --print("LITTLE")
         while  (i < 8) do
             local byte = ffi.cast("uint64_t",self:read8());
             local shifted = lshift(byte, 8*i)
