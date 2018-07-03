@@ -23,7 +23,7 @@ local function printDOSInfo(info)
 end
 
 local function printCOFF(reader)
-	local info = reader.FileHeader;
+	local info = reader.COFF;
 
 	print("==== COFF ====")
 	print(string.format("Machine: %s (0x%x)", peenums.MachineType[info.Machine], info.Machine));
@@ -111,6 +111,7 @@ end
 
 local function printImports(reader)
 	print("===== IMPORTS =====")
+	if not reader.Imports then return ; end
 
 	for k,v in pairs(reader.Imports) do
 		print(k)
@@ -129,8 +130,8 @@ local function printExports(reader)
 	end
 
 	print("Module Name: ", reader.ModuleName)
-	for i, name in ipairs(reader.Exports) do
-		print(name)
+	for i, entry in ipairs(reader.Exports) do
+		print(entry.ordinal, entry.name)
 	end
 	print("---------------------")
 end

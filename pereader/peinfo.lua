@@ -160,9 +160,8 @@ end
     In the context of a PEHeader, a directory is a simple
     structure containing a virtual address, and a size
 ]]
-local function readDirectory(ms, id)
+local function readDirectory(ms)
     local res = {
-        ID = id;
         VirtualAddress = ms:readUInt32();   -- RVA
         Size = ms:readUInt32();
     }
@@ -306,7 +305,7 @@ end
 
 
 function peinfo.readDirectory_Export(self)
-    print("==== readDirectory_Export ====")
+    --print("==== readDirectory_Export ====")
     local dirTable = self.PEHeader.Directories.ExportTable
     if not dirTable then 
         print("NO EXPORT TABLE")
@@ -382,15 +381,14 @@ function peinfo.readDirectory_Export(self)
 
         for i=1, res.NumberOfNames do
             local nameRVA = NamesArrayStream:readUInt32();
---print("nameRVA: ", nameRVA)
             local nameOffset = self:fileOffsetFromRVA(nameRVA)
 
             -- create a stream pointing at the specific name
             local nameStream = binstream(self._data, self._size, 0, true);
             nameStream:seek(nameOffset);
             local name = nameStream:readString();
---print("Export: ", name)
-            table.insert(self.Exports, name)
+            --print("  name: ", name)
+            table.insert(self.Exports, {name = name, ordinal=i, funcptr=0x000000})
             --self.Exports[name] = true;    -- put extended info in here, like ordinal, and func ptr
         end
     end
@@ -472,51 +470,53 @@ function peinfo.readDirectory_Import(self)
 		if (thunkRVA ~= 0) then
             local ThunkArrayOffset = self:fileOffsetFromRVA(thunkRVA);
 --print(string.format("ThunkRVA: 0x%08X (0x%08X)", thunkRVA, ThunkArrayOffset))
-            --if ImportNameTableOffset then
-                -- this will point to an array of IMAGE_THUNK_DATA objects
-                -- so create a separate stream to read them
-                local ThunkArrayStream = binstream(self._data, self._size, 0, true)
-                ThunkArrayStream:seek(ThunkArrayOffset)
 
-                --local thunkIATOffset = self:fileOffsetFromRVA(thunkIATRVA);
-                --ms:seek(thunkIATOffset)
-                --local thunkIATData = ms:readUInt32();
+            -- this will point to an array of IMAGE_THUNK_DATA objects
+            -- so create a separate stream to read them
+            local ThunkArrayStream = binstream(self._data, self._size, 0, true)
+            ThunkArrayStream:seek(ThunkArrayOffset)
 
-                -- Read individual Import names or ordinals
-                while (true) do
-                    -- the thunkPtr is an RVA pointing to the beginning
-                    -- of an array of 
-                    local ThunkDataRVA = false;
-                    local pos = ThunkArrayStream:tell();
-                    if self.isPE32Plus then
+            --local thunkIATOffset = self:fileOffsetFromRVA(thunkIATRVA);
+            --ms:seek(thunkIATOffset)
+            --local thunkIATData = ms:readUInt32();
+
+            -- Read individual Import names or ordinals
+            while (true) do
+                -- the thunkPtr is an RVA pointing to the beginning
+                -- of an array of 
+                local ThunkDataRVA = false;
+                local pos = ThunkArrayStream:tell();
+                if self.isPE32Plus then
                         --print("PE32Plus")
                         ThunkDataRVA = ThunkArrayStream:readUInt64();
-                    else
+                else
                         ThunkDataRVA = ThunkArrayStream:readUInt32();
-                    end
-                    --print("ThunkDataRVA: ", string.format("x%08X", pos), ThunkDataRVA)
-                    --print(string.format("ThunkDataRVA: 0x%08X (0x%08X)", ThunkDataRVA, self:fileOffsetFromRVA(ThunkDataRVA)))
-                    if ThunkDataRVA == 0 then
-                        break;
-                    end
-                    local ThunkDataOffset = self:fileOffsetFromRVA(ThunkDataRVA)
-
-                    --if band(ImportByNameTableOffset, IMAGE_ORDINAL_FLAG32) > 0 then
-                    --    print("** IMPORT ORDINAL!! **")
-                    --else
-                        -- Read the entries in the nametable
-                        local HintNameStream = binstream(self._data, self._size, 0, true);
-                        HintNameStream:seek(ThunkDataOffset)
-
-                        local hint = HintNameStream:readUInt16();
-                        local actualName = HintNameStream:readString();
-
-                        --print(string.format("\t0x%04x %s", hint, actualName))
-                        table.insert(self.Imports[res.DllName], actualName);
-                    --end
                 end
-            --end
+                --print("ThunkDataRVA: ", string.format("x%08X", pos), ThunkDataRVA)
+                --print(string.format("ThunkDataRVA: 0x%08X (0x%08X)", ThunkDataRVA, self:fileOffsetFromRVA(ThunkDataRVA)))
+                if ThunkDataRVA == 0 then
+                    break;
+                end
 
+                local ThunkDataOffset = self:fileOffsetFromRVA(ThunkDataRVA)
+
+                --if band(ThunkDataRVA, IMAGE_ORDINAL_FLAG32) > 0 then
+                -- Check for Ordinal only import
+                -- must be mindful of 32/64-bit
+                if (false) then
+                        print("** IMPORT ORDINAL!! **")
+                else
+                    -- Read the entries in the nametable
+                    local HintNameStream = binstream(self._data, self._size, 0, true);
+                    HintNameStream:seek(ThunkDataOffset)
+
+                    local hint = HintNameStream:readUInt16();
+                    local actualName = HintNameStream:readString();
+
+                    --print(string.format("\t0x%04x %s", hint, actualName))
+                    table.insert(self.Imports[res.DllName], actualName);
+                end
+            end
         end
     end
 
@@ -543,7 +543,7 @@ local function stringFromBuff(buff, size)
 end
 
 function peinfo.readSectionHeaders(self, ms)
-	local nsections = self.FileHeader.NumberOfSections;
+	local nsections = self.COFF.NumberOfSections;
 	self.Sections = {}
 
     for i=1,nsections do
@@ -586,7 +586,7 @@ function peinfo.parseData(self, ms)
     self.PEHeader = {
         signature = ntheadertype;
     }
-    self.FileHeader = self:readCOFF(ms);
+    self.COFF = self:readCOFF(ms);
 
     -- Read the 2 byte magic for the optional header
     local pemagic = ms:readBytes(2);

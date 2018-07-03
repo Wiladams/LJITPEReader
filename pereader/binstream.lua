@@ -22,7 +22,9 @@ local bor, lshift = bit.bor, bit.lshift
     sort of feel:
     tt_memstream(data, size, position)
 ]]
-local tt_memstream = {}
+local tt_memstream = {
+    bigend = true;
+}
 setmetatable(tt_memstream, {
 		__call = function(self, ...)
 		return self:new(...)
