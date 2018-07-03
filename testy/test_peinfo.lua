@@ -26,14 +26,14 @@ local function printCOFF(reader)
 	local info = reader.COFF;
 
 	print("==== COFF ====")
-	print(string.format("Machine: %s (0x%x)", peenums.MachineType[info.Machine], info.Machine));
+	print("                Machine: ", string.format("0x%X", info.Machine), peenums.MachineType[info.Machine]);
 	print("     Number Of Sections: ", info.NumberOfSections);
+	print("        Time Date Stamp: ", string.format("0x%X", info.TimeDateStamp));
 	print("Pointer To Symbol Table: ", info.PointerToSymbolTable);
 	print("      Number of Symbols: ", info.NumberOfSymbols);
 	print("Size of Optional Header: ", info.SizeOfOptionalHeader);
 	print(string.format("        Characteristics: 0x%04x  (%s)", info.Characteristics,
 		enum.bitValues(peenums.Characteristics, info.Characteristics, 32)));
-	--print(string.format("        Characteristics: 0x%04x", info.Characteristics));
 	print("---------------------")
 end
 
@@ -47,18 +47,25 @@ end
 
 --]]
 
-local function printPEHeader(browser)
+local function printOptionalHeader(browser)
 	local info = browser.PEHeader
+	print("==== Optional Header ====")
+	
+	if not info then
+		print(" **   NONE  **")
+		return 
+	end
 
-	print("==== PE Header ====")
-	print(string.format("                   Magic: 0x%04X", info.Magic))
-    print(string.format("          Linker Version:  %d.%d", info.MajorLinkerVersion, info.MinorLinkerVersion));
-	print(string.format("            Size Of Code: 0x%08x", info.SizeOfCode))
+
+	print("                   Magic: ", string.format("0x%04X",info.Magic))
+    print("          Linker Version: ", string.format("%d.%d",info.MajorLinkerVersion, info.MinorLinkerVersion));
+	print("            Size Of Code: ", string.format("0x%08x", info.SizeOfCode))
     print("              Image Base: ", info.ImageBase)
-    print("  Section Alignment: ", info.SectionAlignment)
-	print("     File Alignment: ", info.FileAlignment)
-		print(string.format("  Address of Entry Point: 0x%08X", info.AddressOfEntryPoint))
+    print("       Section Alignment: ", info.SectionAlignment)
+	print("          File Alignment: ", info.FileAlignment)
+	print("  Address of Entry Point: ", string.format("0x%08X",info.AddressOfEntryPoint))
 	print(string.format("            Base of Code: 0x%08X", info.BaseOfCode))
+	-- BaseOfData only exists for 32-bit, not 64-bit
 	if info.BaseOfData then
 		print(string.format("            Base of Data: 0x%08X", info.BaseOfData))
 	end
@@ -70,7 +77,7 @@ end
 
 
 
-local function printDirectoryEntries(reader, dirs)
+local function printDataDirectory(reader, dirs)
 	local dirs = reader.PEHeader.Directories
 	print("==== Directory Entries ====")
 	print(string.format("%20s   %10s    %12s  %s",
@@ -131,7 +138,7 @@ local function printExports(reader)
 
 	print("Module Name: ", reader.ModuleName)
 	for i, entry in ipairs(reader.Exports) do
-		print(entry.ordinal, entry.name)
+		print(entry.ordinal, string.format("0x%08X", entry.funcptr or 0), entry.name)
 	end
 	print("---------------------")
 end
@@ -150,8 +157,8 @@ local function main()
 
 	printDOSInfo(peinfo.DOSHeader)
 	printCOFF(peinfo)
-	printPEHeader(peinfo)
-	printDirectoryEntries(peinfo)
+	printOptionalHeader(peinfo)
+	printDataDirectory(peinfo)
 	printSectionHeaders(peinfo)
 	printImports(peinfo)
 	printExports(peinfo)

@@ -45,7 +45,7 @@ function tt_memstream.init(self, data, size, position, littleendian)
         bigend = not littleendian;
         data = ffi.cast("uint8_t *", data);
         size = size;
-        cursor = 0;
+        cursor = position;
     }
  
     setmetatable(obj, tt_memstream_mt)
@@ -146,8 +146,25 @@ function tt_memstream.readBytes(self, n)
     return bytes;
 end
 
+-- Read a null terminated ASCIIZ string
+-- do not read more than 'n' bytes
+-- advance the cursor by actual bytes read
+function tt_memstream.readASCIIZ(self, n)
+    n = n or 0
+    if n < 1 then return ; end
+    local bytes = ffi.new("uint8_t[?]", n+1)
+
+    for i=1,n do
+        local byte = self:read8();
+        bytes[i-1] = byte
+
+        if byte == 0 then break end
+    end
+    return ffi.string(bytes)
+end
+
+
 function tt_memstream.readString(self, n)
-    --if n < 1 then return false end
     local str = nil;
     if not n then
         str = ffi.string(self.data+self.cursor)

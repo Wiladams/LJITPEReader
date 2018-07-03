@@ -143,7 +143,7 @@ end
 function peinfo.readCOFF(self, ms)
     local res = {
         Machine = ms:readUInt16();
-        NumberOfSections = ms:readUInt16();
+        NumberOfSections = ms:readUInt16();     -- Windows loader limits to 96
         TimeDateStamp = ms:readUInt32();
         PointerToSymbolTable = ms:readUInt32();
         NumberOfSymbols = ms:readUInt32();
@@ -305,7 +305,7 @@ end
 
 
 function peinfo.readDirectory_Export(self)
-    --print("==== readDirectory_Export ====")
+    print("==== readDirectory_Export ====")
     local dirTable = self.PEHeader.Directories.ExportTable
     if not dirTable then 
         print("NO EXPORT TABLE")
@@ -371,24 +371,48 @@ function peinfo.readDirectory_Export(self)
     print("       NumberOfNames: ", res.NumberOfNames);
     print("  AddressOfFunctions: ", res.AddressOfFunctions);
     print("      AddressOfNames: ", res.AddressOfNames);
+    print("AddressOfNameOrdinals: ", string.format("0x%X", res.AddressOfNameOrdinals));
 --]]
+
+    -- Get the function pointers
+    local EATable = ffi.new("uint32_t[?]", res.NumberOfFunctions)
+    if res.NumberOfFunctions > 0 then
+        local EATOffset = self:fileOffsetFromRVA(res.AddressOfFunctions);
+        local EATStream = binstream(self._data, self._size, EATOffset, true);
+
+        for i=1, res.NumberOfFunctions do 
+            local AddressRVA = EATStream:readUInt32()
+            local section = self:GetEnclosingSectionHeader(AddressRVA)
+            --print("Function: ", string.format("0x%08X", AddressRVA), section.Name)
+            EATable[i-1] = self:fileOffsetFromRVA(AddressRVA);
+        end
+    end
 
     -- Get the names if the Names array exists
     if res.NumberOfNames > 0 then
         local NamesArrayOffset = self:fileOffsetFromRVA(res.AddressOfNames)
-        local NamesArrayStream = binstream(self._data, self._size, 0, true);
-        NamesArrayStream:seek(NamesArrayOffset);
+        local NamesArrayStream = binstream(self._data, self._size, NamesArrayOffset, true);
+        --NamesArrayStream:seek(NamesArrayOffset);
+
+        -- Setup a stream for the AddressOfNameOrdinals (EOT) table
+        local EOTOffset = self:fileOffsetFromRVA(res.AddressOfNameOrdinals);
+        local EOTStream = binstream(self._data, self._size, EOTOffset, true);
+        --EOTStream:seek(EOTOffset);
+
 
         for i=1, res.NumberOfNames do
+            -- create a stream pointing at the specific name
             local nameRVA = NamesArrayStream:readUInt32();
             local nameOffset = self:fileOffsetFromRVA(nameRVA)
+            local nameStream = binstream(self._data, self._size, nameOffset, true);
+--nameStream:seek(nameOffset);
 
-            -- create a stream pointing at the specific name
-            local nameStream = binstream(self._data, self._size, 0, true);
-            nameStream:seek(nameOffset);
             local name = nameStream:readString();
-            --print("  name: ", name)
-            table.insert(self.Exports, {name = name, ordinal=i, funcptr=0x000000})
+            local ordinal = EOTStream:readUInt16();
+            local funcptr = EATable[ordinal];
+
+            --print("  name: ", ordinal, name)
+            table.insert(self.Exports, {name = name, ordinal=ordinal, funcptr=funcptr})
             --self.Exports[name] = true;    -- put extended info in here, like ordinal, and func ptr
         end
     end
@@ -560,8 +584,6 @@ function peinfo.readSectionHeaders(self, ms)
             Characteristics = ms:readUInt32();
         }
 
-		--local sec = IMAGE_SECTION_HEADER(pefile.PEHeader.Buffer, pefile.PEHeader.BufferSize, offset)
-		--local nameptr, len = sec:get_Name()
 		sec.Name = stringFromBuff(sec.Name, 8)
 
 		self.Sections[sec.Name] = sec
@@ -570,15 +592,28 @@ function peinfo.readSectionHeaders(self, ms)
 	return self
 end
 
+--[[
+    DOS Header
+    COFF Header
+]]
 function peinfo.parseData(self, ms)
     self.DOSHeader = self:readDOSHeader(ms);
+---[[
+    print("---- parseData ----")
+    print("  DOS Header Ends: ", ms:tell());
+    print(" PE Header Begins: ", string.format("0x%x", self.DOSHeader.e_lfanew))
+    print("    DOS Body size: ", string.format("0x%x", self.DOSHeader.e_lfanew - ms:tell()))
+--]]
+    -- Skip over the DOS stub
+    -- really we should capture that as a base64 string
+    ms:seek(self.DOSHeader.e_lfanew)
 
  
     -- get nt header type, 
     -- seek to where the header
     -- is supposed to start
     ms:seek(self.DOSHeader.e_lfanew)
-    local sentinel = ms:tell();
+    --local sentinel = ms:tell();
     
     local ntheadertype = ms:readBytes(4);
     print("Is PE Image File: ", IsPEFormatImageFile(ntheadertype))
