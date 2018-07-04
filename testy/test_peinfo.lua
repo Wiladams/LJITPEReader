@@ -138,7 +138,11 @@ local function printExports(reader)
 
 	print("Module Name: ", reader.ModuleName)
 	for i, entry in ipairs(reader.Exports) do
-		print(entry.ordinal, string.format("0x%08X", entry.funcptr or 0), entry.name)
+		if type(entry.funcptr) == "string" then
+			print(string.format("%4d %4d %50s %s",entry.ordinal, entry.hint, entry.name, entry.funcptr))
+		else 
+			print(string.format("%4d %4d %50s %s",entry.ordinal, entry.hint, entry.name, string.format("0x%08X", entry.funcptr or 0)))
+		end
 	end
 	print("---------------------")
 end

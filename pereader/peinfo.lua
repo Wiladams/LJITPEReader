@@ -336,19 +336,19 @@ function peinfo.readDirectory_Export(self)
     -- We are now in position to read the actual export table data
     -- The data consists of various bits and pieces of information, including
     -- pointers to the actual export information.
-    local res = {
-        Characteristics = ms:readUInt32();
-        TimeDateStamp = ms:readUInt32();
-        MajorVersion = ms:readUInt16();
-        MinorVersion = ms:readUInt16();
-        nName = ms:readUInt32();                -- Relative to image base
-        nBase = ms:readUInt32();
-        NumberOfFunctions = ms:readUInt32();
-        NumberOfNames = ms:readUInt32();
-        AddressOfFunctions = ms:readUInt32();
-        AddressOfNames = ms:readUInt32();
-        AddressOfNameOrdinals = ms:readUInt32();
-    }
+    local res = dirTable;
+        dirTable.Characteristics = ms:readUInt32();
+        dirTable.TimeDateStamp = ms:readUInt32();
+        dirTable.MajorVersion = ms:readUInt16();
+        dirTable.MinorVersion = ms:readUInt16();
+        dirTable.nName = ms:readUInt32();                -- Relative to image base
+        dirTable.nBase = ms:readUInt32();
+        dirTable.NumberOfFunctions = ms:readUInt32();
+        dirTable.NumberOfNames = ms:readUInt32();
+        dirTable.AddressOfFunctions = ms:readUInt32();
+        dirTable.AddressOfNames = ms:readUInt32();
+        dirTable.AddressOfNameOrdinals = ms:readUInt32();
+
 
     -- Get the internal name of the module
     local nNameOffset = self:fileOffsetFromRVA(res.nName)
@@ -356,8 +356,7 @@ function peinfo.readDirectory_Export(self)
         -- use a separate stream to read the string so we don't
         -- upset the positioning on the one that's reading
         -- the import descriptors
-        local ns = binstream(self._data, self._size, 0, true)
-        ns:seek(nNameOffset)
+        local ns = binstream(self._data, self._size, nNameOffset, true)
         self.ModuleName = ns:readString();
         --print("Module Name: ", res.ModuleName)
     end 
@@ -375,7 +374,7 @@ function peinfo.readDirectory_Export(self)
 --]]
 
     -- Get the function pointers
-    local EATable = ffi.new("uint32_t[?]", res.NumberOfFunctions)
+    local EATable = {}; -- ffi.new("uint32_t[?]", res.NumberOfFunctions)
     if res.NumberOfFunctions > 0 then
         local EATOffset = self:fileOffsetFromRVA(res.AddressOfFunctions);
         local EATStream = binstream(self._data, self._size, EATOffset, true);
@@ -383,8 +382,18 @@ function peinfo.readDirectory_Export(self)
         for i=1, res.NumberOfFunctions do 
             local AddressRVA = EATStream:readUInt32()
             local section = self:GetEnclosingSectionHeader(AddressRVA)
-            --print("Function: ", string.format("0x%08X", AddressRVA), section.Name)
-            EATable[i-1] = self:fileOffsetFromRVA(AddressRVA);
+            --print("Export Function: ", string.format("0x%08X", AddressRVA), section, section.Name)
+            local ExportOffset = self:fileOffsetFromRVA(AddressRVA)
+
+            -- If it's an internal function then store the RVA
+            if section and section.Name == '.text' then
+                --table.insert(EATable, ExportOffset);
+                table.insert(EATable, AddressRVA);
+            else
+                local ForwardStream = binstream(self._data, self._size, ExportOffset, true)
+                local forwardName = ForwardStream:readString();
+                table.insert(EATable, forwardName)
+            end
         end
     end
 
@@ -408,17 +417,18 @@ function peinfo.readDirectory_Export(self)
 --nameStream:seek(nameOffset);
 
             local name = nameStream:readString();
-            local ordinal = EOTStream:readUInt16();
+            local hint = EOTStream:readUInt16();
+            local ordinal = hint + dirTable.nBase;
             local funcptr = EATable[ordinal];
 
             --print("  name: ", ordinal, name)
-            table.insert(self.Exports, {name = name, ordinal=ordinal, funcptr=funcptr})
+            table.insert(self.Exports, {name = name, hint=hint, ordinal = ordinal , funcptr=funcptr})
             --self.Exports[name] = true;    -- put extended info in here, like ordinal, and func ptr
         end
     end
 
 
-    return res;
+    return self.Exports;
 end
 
 local IMAGE_ORDINAL_FLAG32 = 0x80000000
@@ -551,8 +561,8 @@ end
 function peinfo.readDirectories(self)
     self.Directories = self.Directories or {}
     
-    self.Directories.Export = self:readDirectory_Export();
-    self.Directories.Import = self:readDirectory_Import();
+    self:readDirectory_Export();
+    self:readDirectory_Import();
 
 end
 
