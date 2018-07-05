@@ -24,5 +24,5 @@ local data = ffi.cast("uint8_t *", mfile:getPointer());
 local ms = binstream(data, mfile.size)
 
 
-putils.printHex(ms, 256)
+putils.printHex(ms, 32)
 
