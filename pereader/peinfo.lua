@@ -32,24 +32,23 @@ local peinfo_mt = {
     __index = peinfo;
 }
 
-function peinfo.init(self, data, size)
-
-    local obj = {
-        _data = data;
-        _size = size;
-    }
+function peinfo.init(self, obj)
+    obj = obj or {}
 
     setmetatable(obj, peinfo_mt)
-    
-    local ms = binstream(data, size, 0, true);
-
-    peinfo.parseData(obj, ms);
 
     return obj;
 end
 
-function peinfo.create(self, data, size)
-    return self:init(data, size)
+function peinfo.create(self, obj)
+    return self:init(obj)
+end
+
+function peinfo.fromData(self, data, size)
+    local ms = binstream(data, size, 0, true);
+    local obj = self:create()
+
+    return obj:parse(ms)
 end
 
 --[[
@@ -110,9 +109,16 @@ end
 --[[]
     Now for the actual parsing of the data stream
 ]]
-function peinfo.readDOSHeader(self, ms)
+function peinfo.readDOSHeader(self)
+    local ms = self.SourceStream;
+    local e_magic = ms:readBytes(2);    -- Magic number, must be 'MZ'
+    print(string.format("DOS HEADER SIG: %c %c", e_magic[0], e_magic[1]))
+    if e_magic[0] ~= string.byte('M') or e_magic[1] ~= string.byte('Z') then
+        return false, "'MZ' signature not found"
+    end
+
     local res = {
-        e_magic = ms:readBytes(2);                     -- Magic number
+        e_magic = e_magic;                     -- Magic number
         e_cblp = ms:readUInt16();                      -- Bytes on last page of file
         e_cp = ms:readUInt16();                        -- Pages in file
         e_crlc = ms:readUInt16();                      -- Relocations
@@ -330,8 +336,8 @@ function peinfo.readDirectory_Export(self)
     -- We now know where the actual export table exists, so 
     -- create a binary stream, and position it at the offset
     --print("   binstream: ", self._data, self._size)
-    local ms = binstream(self._data, self._size, 0, true)
-    ms:seek(fileOffset);
+    local ms = binstream(self._data, self._size, fileOffset, true)
+
 
     -- We are now in position to read the actual export table data
     -- The data consists of various bits and pieces of information, including
@@ -386,6 +392,10 @@ function peinfo.readDirectory_Export(self)
             local ExportOffset = self:fileOffsetFromRVA(AddressRVA)
 
             -- If it's an internal function then store the RVA
+            -- functions are not always going to be in the .text
+            -- section, but mostly are.
+            -- Need to come up with a reliable way to determine when
+            -- an RVA is pointing to a forward reference
             if section and section.Name == '.text' then
                 --table.insert(EATable, ExportOffset);
                 table.insert(EATable, AddressRVA);
@@ -606,8 +616,17 @@ end
     DOS Header
     COFF Header
 ]]
-function peinfo.parseData(self, ms)
-    self.DOSHeader = self:readDOSHeader(ms);
+function peinfo.parse(self, ms)
+    self.SourceStream = ms;
+    self._data = ms.data;
+    self._size = ms.size;
+
+    local dosHeader, err = self:readDOSHeader();
+    if not dosHeader then 
+        return false, err;
+    end
+
+    self.DOSHeader = dosHeader;
 ---[[
     print("---- parseData ----")
     print("  DOS Header Ends: ", ms:tell());
