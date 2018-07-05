@@ -3,3 +3,5 @@ docs/~$coff_v83.docx
 testy/kernel32_exports.txt
 testy/kernel32.txt
 testy/gdi32.txt
+testy/lua51_all.txt
+testy/lua51_headers.txt

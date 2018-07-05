@@ -139,6 +139,8 @@ end
 
 -- BUGBUG, do error checking against end of stream
 function tt_memstream.readBytes(self, n)
+    if n < 1 then return false, "must specify more then 0 bytes" end
+
     local bytes = ffi.new("uint8_t[?]", n)
     ffi.copy(bytes, self.data+self.cursor, n)
     self.cursor = self.cursor + n;

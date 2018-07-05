@@ -18,8 +18,11 @@ end
 
 
 local function printDOSInfo(info)
-	print(string.format("    Magic: %c%c", info.e_magic[0], info.e_magic[1]))
-	print(string.format("PE Offset: 0x%x", info.e_lfanew));
+	print("==== DOS ====")
+	print("    Magic: ", string.format("%c%c", info.Header.e_magic[0], info.Header.e_magic[1]))
+	print("PE Offset: ", string.format("0x%04x", info.Header.e_lfanew));
+	print("Stub Size: ", string.format("0x%04x (%d)", info.StubSize, info.StubSize))
+	print("---------------------")
 end
 
 local function printCOFF(reader)
@@ -74,9 +77,6 @@ local function printOptionalHeader(browser)
 	print("---------------------")
 end
 
-
-
-
 local function printDataDirectory(reader, dirs)
 	local dirs = reader.PEHeader.Directories
 	print("==== Directory Entries ====")
@@ -104,7 +104,7 @@ local function printSectionHeaders(reader)
 		print("Name: ", name)
 		print(string.format("            Virtual Size: %d", section.VirtualSize))
 		print(string.format("         Virtual Address: 0x%08X", section.VirtualAddress))
-		print(string.format("        Size of Raw Data: %d", section.SizeOfRawData))
+		print(string.format("        Size of Raw Data: 0x%08X (%d)", section.SizeOfRawData, section.SizeOfRawData))
 		print(string.format("     Pointer to Raw Data: 0x%08X", section.PointerToRawData))
 		print(string.format("  Pointer to Relocations: 0x%08X", section.PointerToRelocations))
 		print(string.format("  Pointer To Linenumbers: 0x%08X", section.PointerToLinenumbers))
@@ -162,7 +162,7 @@ local function main()
 		return
 	end
 
-	printDOSInfo(peinfo.DOSHeader)
+	printDOSInfo(peinfo.DOS)
 	printCOFF(peinfo)
 	printOptionalHeader(peinfo)
 	printDataDirectory(peinfo)

@@ -95,6 +95,9 @@ function peinfo.GetEnclosingSectionHeader(self, rva)
     return false;
 end
 
+-- There are many values within the file which are 'RVA' (Relative Virtual Address)
+-- In order to translate this RVA into a file offset, we use the following
+-- function.
 function peinfo.fileOffsetFromRVA(self, rva)
 --print("==== fileOffsetFromRVA: ", rva)
     local section = self:GetEnclosingSectionHeader( rva);
@@ -109,36 +112,41 @@ end
 --[[]
     Now for the actual parsing of the data stream
 ]]
+
+
 function peinfo.readDOSHeader(self)
     local ms = self.SourceStream;
     local e_magic = ms:readBytes(2);    -- Magic number, must be 'MZ'
-    print(string.format("DOS HEADER SIG: %c %c", e_magic[0], e_magic[1]))
-    if e_magic[0] ~= string.byte('M') or e_magic[1] ~= string.byte('Z') then
-        return false, "'MZ' signature not found"
+    
+    local function isValidDOS(bytes)
+        return bytes[0] == string.byte('M') and
+            bytes[1] == string.byte('Z')
+    end
+    
+    if not isValidDOS(e_magic) then
+        return false, "'MZ' signature not found", e_magic
     end
 
     local res = {
-        e_magic = e_magic;                     -- Magic number
-        e_cblp = ms:readUInt16();                      -- Bytes on last page of file
-        e_cp = ms:readUInt16();                        -- Pages in file
-        e_crlc = ms:readUInt16();                      -- Relocations
-        e_cparhdr = ms:readUInt16();                   -- Size of header in paragraphs
-        e_minalloc = ms:readUInt16();                  -- Minimum extra paragraphs needed
-        e_maxalloc = ms:readUInt16();                  -- Maximum extra paragraphs needed
-        e_ss = ms:readUInt16();                        -- Initial (relative) SS value
-        e_sp = ms:readUInt16();                        -- Initial SP value
-        e_csum = ms:readUInt16();                      -- Checksum
-        e_ip = ms:readUInt16();                        -- Initial IP value
-        e_cs = ms:readUInt16();                        -- Initial (relative) CS value
-        e_lfarlc = ms:readUInt16();                    -- File address of relocation table
-        e_ovno = ms:readUInt16();                      -- Overlay number
-        ms:skip(4*2);
-        --e_res, basetype="uint16_t", repeating=4},    -- Reserved s
-        e_oemid = ms:readUInt16();                     -- OEM identifier (for e_oeminfo)
-        e_oeminfo = ms:readUInt16();                   -- OEM information; e_oemid specific
-        ms:skip(10*2);
-        --e_res2, basetype="uint16_t", repeating=10},  -- Reserved s
-        e_lfanew = ms:readUInt32();                    -- File address of new exe header
+        e_magic = e_magic;                      -- Magic number
+        e_cblp = ms:readUInt16();               -- Bytes on last page of file
+        e_cp = ms:readUInt16();                 -- Pages in file
+        e_crlc = ms:readUInt16();               -- Relocations
+        e_cparhdr = ms:readUInt16();            -- Size of header in paragraphs
+        e_minalloc = ms:readUInt16();           -- Minimum extra paragraphs needed
+        e_maxalloc = ms:readUInt16();           -- Maximum extra paragraphs needed
+        e_ss = ms:readUInt16();                 -- Initial (relative) SS value
+        e_sp = ms:readUInt16();                 -- Initial SP value
+        e_csum = ms:readUInt16();               -- Checksum
+        e_ip = ms:readUInt16();                 -- Initial IP value
+        e_cs = ms:readUInt16();                 -- Initial (relative) CS value
+        e_lfarlc = ms:readUInt16();             -- File address of relocation table
+        e_ovno = ms:readUInt16();               -- Overlay number
+        ms:skip(4*2);                           -- e_res, basetype="uint16_t", repeating=4},    -- Reserved s
+        e_oemid = ms:readUInt16();              -- OEM identifier (for e_oeminfo)
+        e_oeminfo = ms:readUInt16();            -- OEM information; e_oemid specific
+        ms:skip(10*2);                          -- e_res2, basetype="uint16_t", repeating=10},  -- Reserved s
+        e_lfanew = ms:readUInt32();             -- File address of new exe header
     }
 
     return res;
@@ -146,7 +154,9 @@ end
 
 
 
-function peinfo.readCOFF(self, ms)
+function peinfo.readCOFF(self)
+    local ms = self.SourceStream;
+
     local res = {
         Machine = ms:readUInt16();
         NumberOfSections = ms:readUInt16();     -- Windows loader limits to 96
@@ -166,8 +176,9 @@ end
     In the context of a PEHeader, a directory is a simple
     structure containing a virtual address, and a size
 ]]
-local function readDirectory(ms)
+local function readDirectory(ms, id)
     local res = {
+        ID = id;
         VirtualAddress = ms:readUInt32();   -- RVA
         Size = ms:readUInt32();
     }
@@ -195,6 +206,19 @@ local dirNames = {
     "CLRRuntimeHeader",
     "Reserved"
 }
+
+function peinfo.readDirectoryTable(self)
+    local ms = self.SourceStream;
+    
+    -- Read directory index entries
+    self.PEHeader.Directories = {}
+    for i, name in ipairs(dirNames) do
+        local dir = readDirectory(ms, i-1);
+        if dir.Size ~= 0 then
+            self.PEHeader.Directories[name] = dir;
+        end
+    end
+end
 
 function peinfo.readPE32Header(self, ms)
     print("==== readPE32Header ====")
@@ -242,15 +266,18 @@ function peinfo.readPE32Header(self, ms)
     -- Read directory index entries
     -- Only save the ones that actually
     -- have data in them
-    self.PEHeader.Directories = {}
+    self:readDirectoryTable();
+--[[
+        self.PEHeader.Directories = {}
     --print("  READ DIRECTORIES ")
     for i, name in ipairs(dirNames) do
         --print("dir offset: ", name, ms:tell()-startOff)
-        local dir = readDirectory(ms);
+        local dir = readDirectory(ms,i-1);
         if dir.Size ~= 0 then
             self.PEHeader.Directories[name] = dir;
         end
     end
+--]]
 
     return self;
 end
@@ -295,16 +322,7 @@ function peinfo.readPE32PlusHeader(self, ms)
 		NumberOfRvaAndSizes = ms:readUInt32();
     }
 
-    -- Read directory index entries
-    self.PEHeader.Directories = {}
-    for i, name in ipairs(dirNames) do
-        local dir = readDirectory(ms);
-        if dir.Size ~= 0 then
-            self.PEHeader.Directories[name] = dir;
-        end
-    end
-
-
+    self:readDirectoryTable();
 
     return self;
 end
@@ -616,40 +634,56 @@ end
     DOS Header
     COFF Header
 ]]
+function peinfo.readPESignature(self)
+    local ntheadertype = self.SourceStream:readBytes(4);
+    if not IsPEFormatImageFile(ntheadertype) then
+        return false, "not PE Format Image File"
+    end
+
+    self.PEHeader = {
+        signature = ntheadertype;
+    }
+
+    return ntheadertype;
+end
+
 function peinfo.parse(self, ms)
     self.SourceStream = ms;
     self._data = ms.data;
     self._size = ms.size;
 
-    local dosHeader, err = self:readDOSHeader();
-    if not dosHeader then 
+    local DOSHeader, err, sig = self:readDOSHeader();
+    if not DOSHeader then 
+        return false, err, sig;
+    end
+
+    local DOSBodySize = DOSHeader.e_lfanew - ms:tell();
+    self.DOS = {
+        Header = DOSHeader;
+        StubSize = DOSBodySize;
+        Stub = ms:readBytes(DOSBodySize);   -- Valid DOS stub program
+    }
+
+--[[
+    print("---- parseData ----")
+    print("  DOS Header Ends: ", ms:tell());
+    print(" PE Header Begins: ", string.format("0x%x", DOSHeader.e_lfanew))
+    print("    DOS Body size: ", DOSBodySize)
+--]]
+ 
+
+    -- seek to where the PE header
+    -- is supposed to start
+    ms:seek(DOSHeader.e_lfanew)
+
+    -- we assume we can only read PE, and PE+ files
+    -- anything else is an error
+    local pesig, err = self:readPESignature()
+
+    if not pesig then
         return false, err;
     end
 
-    self.DOSHeader = dosHeader;
----[[
-    print("---- parseData ----")
-    print("  DOS Header Ends: ", ms:tell());
-    print(" PE Header Begins: ", string.format("0x%x", self.DOSHeader.e_lfanew))
-    print("    DOS Body size: ", string.format("0x%x", self.DOSHeader.e_lfanew - ms:tell()))
---]]
-    -- Skip over the DOS stub
-    -- really we should capture that as a base64 string
-    ms:seek(self.DOSHeader.e_lfanew)
-
- 
-    -- get nt header type, 
-    -- seek to where the header
-    -- is supposed to start
-    ms:seek(self.DOSHeader.e_lfanew)
-    --local sentinel = ms:tell();
-    
-    local ntheadertype = ms:readBytes(4);
-    print("Is PE Image File: ", IsPEFormatImageFile(ntheadertype))
-
-    self.PEHeader = {
-        signature = ntheadertype;
-    }
     self.COFF = self:readCOFF(ms);
 
     -- Read the 2 byte magic for the optional header
