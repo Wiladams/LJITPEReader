@@ -149,6 +149,13 @@ function peinfo.readDOSHeader(self)
         e_lfanew = ms:readUInt32();             -- File address of new exe header
     }
 
+--[[
+    print("---- parseData ----")
+    print("  DOS Header Ends: ", ms:tell());
+    print(" PE Header Begins: ", string.format("0x%x", DOSHeader.e_lfanew))
+    print("    DOS Body size: ", DOSBodySize)
+--]]
+
     return res;
 end
 
@@ -267,17 +274,6 @@ function peinfo.readPE32Header(self, ms)
     -- Only save the ones that actually
     -- have data in them
     self:readDirectoryTable();
---[[
-        self.PEHeader.Directories = {}
-    --print("  READ DIRECTORIES ")
-    for i, name in ipairs(dirNames) do
-        --print("dir offset: ", name, ms:tell()-startOff)
-        local dir = readDirectory(ms,i-1);
-        if dir.Size ~= 0 then
-            self.PEHeader.Directories[name] = dir;
-        end
-    end
---]]
 
     return self;
 end
@@ -604,7 +600,9 @@ local function stringFromBuff(buff, size)
 	return ffi.string(buff, truelen)
 end
 
-function peinfo.readSectionHeaders(self, ms)
+function peinfo.readSectionHeaders(self)
+    local ms = self.SourceStream;
+
 	local nsections = self.COFF.NumberOfSections;
 	self.Sections = {}
 
@@ -622,6 +620,12 @@ function peinfo.readSectionHeaders(self, ms)
             Characteristics = ms:readUInt32();
         }
 
+        -- NOTE: Not sure if we should use all 8 bytes or null terminate
+        -- the spec says use 8 bytes, don't assume null terminated ASCII
+        -- in practice, these are usually ASCII strings.
+        -- They could be UNICODE, or any 8 consecutive bytes.  Since
+        -- Lua doesn't really care, I suppose the right thing to do is
+        -- use all 8 bytes, and only create a 'pretty' name for display purposes
 		sec.Name = stringFromBuff(sec.Name, 8)
 
 		self.Sections[sec.Name] = sec
@@ -647,6 +651,29 @@ function peinfo.readPESignature(self)
     return ntheadertype;
 end
 
+function peinfo.readPEOptionalHeader(self)
+    local ms = self.SourceStream;
+
+-- NOTE: Using the sizeOfOptionalHeader, and current offset
+        -- we should be able to get a subrange of the stream to 
+        -- read from.  Not currently doing it.
+
+        -- Read the 2 byte magic for the optional header
+        local pemagic = ms:readBytes(2);
+        --print(string.format("PEMAGIC: 0x%x 0x%x", pemagic[0], pemagic[1]))
+
+        -- unwind reading the magic so we can read it again
+        -- as part of reading the whole 'optional' header
+        ms:seek(ms:tell()-2);
+
+
+        if IsPe32Header(pemagic) then
+            self:readPE32Header(ms);
+        elseif IsPe32PlusHeader(pemagic) then
+            self:readPE32PlusHeader(ms);
+        end
+end 
+
 function peinfo.parse(self, ms)
     self.SourceStream = ms;
     self._data = ms.data;
@@ -663,20 +690,12 @@ function peinfo.parse(self, ms)
         StubSize = DOSBodySize;
         Stub = ms:readBytes(DOSBodySize);   -- Valid DOS stub program
     }
-
---[[
-    print("---- parseData ----")
-    print("  DOS Header Ends: ", ms:tell());
-    print(" PE Header Begins: ", string.format("0x%x", DOSHeader.e_lfanew))
-    print("    DOS Body size: ", DOSBodySize)
---]]
  
-
     -- seek to where the PE header
     -- is supposed to start
     ms:seek(DOSHeader.e_lfanew)
 
-    -- we assume we can only read PE, and PE+ files
+    -- we assume we can only read Portable Executable
     -- anything else is an error
     local pesig, err = self:readPESignature()
 
@@ -684,27 +703,15 @@ function peinfo.parse(self, ms)
         return false, err;
     end
 
-    self.COFF = self:readCOFF(ms);
+    self.PESignature = pesig;
+    self.COFF = self:readCOFF();
 
-    -- Read the 2 byte magic for the optional header
-    local pemagic = ms:readBytes(2);
-    print(string.format("PEMAGIC: 0x%x 0x%x", pemagic[0], pemagic[1]))
-
-    -- unwind reading the magic so we can read it again
-    -- as part of reading the whole 'optional' header
-    ms:seek(ms:tell()-2);
-
-    -- we know from the file header what size the
-    -- optional header is supposed to be, so we can 
-    -- create a sub-stream for reading that section alone
-    if IsPe32Header(pemagic) then
-        self:readPE32Header(ms);
-    elseif IsPe32PlusHeader(pemagic) then
-        self:readPE32PlusHeader(ms);
+    if self.COFF.SizeOfOptionalHeader > 0 then
+        self.PEHeader = self:readPEOptionalHeader();
     end
 
     -- Now offset should be positioned at the section table
-    self:readSectionHeaders(ms)
+    self:readSectionHeaders()
 
     -- Now that we have section information, we should
     -- be able to read detailed directory information
