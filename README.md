@@ -34,6 +34,39 @@ local function main()
 	printExports(info)
 end
 ```
+The point of the peinfo object is to give you relatively easy access to the bits and 
+pieces of a Portable Executable (PE) file.  There's quite a bit of esoterica, misunderstanding
+and plain wrongness about parsing PE files.  This object tries to get things right, 
+pulling from examples, documentation, confirming with tools such as dumpbin, and the like.
+
+The result is you can do things like access headers, sections, directories and the like with ease.
+For example, if you want to print out a list of all the functions that are exported by a PE file;
+
+```lua
+local function printExports(reader)
+	print("===== EXPORTS =====")
+	if (not reader.Exports) then
+		print("  NO EXPORTS")
+		return ;
+	end
+
+	print("Module Name: ", reader.ModuleName)
+	for i, entry in ipairs(reader.Exports) do
+		if type(entry.funcptr) == "string" then
+			print(string.format("%4d %4d %50s %s",entry.ordinal, entry.hint, entry.name, entry.funcptr))
+		else 
+			print(string.format("%4d %4d %50s %s",entry.ordinal, entry.hint, entry.name, string.format("0x%08X", entry.funcptr or 0)))
+		end
+	end
+end
+```
+
+This will also take care of those cases where you have forward exports, which means the function pointer isn't actually a pointer to a function within the .dll you're examining, but rather a pointer to a string which represents the actual
+function within a different library.
+
+You can find various bits and bobs in the 'testy' directory.  Of most note is the 'test_penifo.lua' file.  This acts 
+essentially like the 'dumpbin' program that is found on Windows.  It will dump all the interesting information found in the PE file, like the various headers, directories, sections, imports, exports.  It dumps in a human readable form, similar to what dumpbin does.  If you'd prefer dumping into another machine readable form such as Lua, or JSON, you
+can probably construct such a program using this one as a starting point.
 
 **Chronology**
 6 July 2018
