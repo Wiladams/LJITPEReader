@@ -6,11 +6,17 @@ The routines in this project replicate that inbuilt capability, but using Lua.  
 any platform where Lua is supported.
 
 Chronology
+6 July 2018
+Cleanup and refactoring in peinfo
+Improve error handling in binstream
+Add print_utils, with printHex() function
+Improve detection of Export forward reference by checking section characteristics
+
 1 July 2018
 Correctly parse imports for 32 and 64-bit images
 Correctly parse export names only, no ordinal or address tables
 Put internal module name into parser 'ModuleName' field
 
 References
-    https://msdn.microsoft.com/library/windows/desktop/ms680547(v=vs.85).aspx
-http://www.sunshine2k.de/reversing/tuts/tut_rvait.htm
+* [https://msdn.microsoft.com/library/windows/desktop/ms680547(v=vs.85).aspx]
+* http://www.sunshine2k.de/reversing/tuts/tut_rvait.htm
