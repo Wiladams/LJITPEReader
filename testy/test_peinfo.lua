@@ -156,19 +156,19 @@ local function main()
 
 	local data = ffi.cast("uint8_t *", mfile:getPointer());
 
-	local peinfo, err = peinfo:fromData(data, mfile.size);
-	if not peinfo then
+	local info, err = peinfo:fromData(data, mfile.size);
+	if not info then
 		print("ERROR: fromData - ", err)
 		return
 	end
 
-	printDOSInfo(peinfo.DOS)
-	printCOFF(peinfo)
-	printOptionalHeader(peinfo)
-	printDataDirectory(peinfo)
-	printSectionHeaders(peinfo)
-	printImports(peinfo)
-	printExports(peinfo)
+	printDOSInfo(info.DOS)
+	printCOFF(info)
+	printOptionalHeader(info)
+	printDataDirectory(info)
+	printSectionHeaders(info)
+	printImports(info)
+	printExports(info)
 end
 
 main()
