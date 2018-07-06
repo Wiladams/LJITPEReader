@@ -90,7 +90,7 @@ The peinfo object has the convenient `peinfo.fileOffsetFromRVA(self, rva)` which
 
 As a convenience, there is the 'testy/print_utils.lua' file.  This contains functions that make printing hex dumps prettier.  The one function: `printHex(ms, buffer, offsetbits, iterations)' will take a stream 'ms', and print it out as a pretty printed 'hex' display.  The 'buffer' parameter is a convenience you can pass in so that one is not allocated within the function itself.  'offsetbits' tells the routine whether to print 32-bit or 64-bit offsets.  The 'iterations' parameter tells how many lines to print.  If left out, all lines will be printed.
 
-'
+```
 Offset (h)  00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F  Decoded text
 0x00000000: 4D 5A 90 00 03 00 00 00  04 00 00 00 FF FF 00 00  MZ..............
 0x00000010: B8 00 00 00 00 00 00 00  40 00 00 00 00 00 00 00  ........@.......
@@ -109,7 +109,7 @@ Offset (h)  00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F  Decoded text
 0x000000E0: 87 5D 65 C6 6D 39 67 C7  52 69 63 68 6C 39 67 C7  .]e.m9g.Richl9g.
 0x000000F0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
 0x00000100: 50 45 00 00 64 86 05 00  98 E3 29 5B 00 00 00 00  PE..d.....)[....
-`
+```
 
 This is very convenient when you don't already have a favored hex editor.  You can quickly dump the contents of some file, load it into a reasonable text editor, and poke around at various addresses to see what you can see.
 
