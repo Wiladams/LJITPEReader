@@ -7,9 +7,7 @@
     Typical usage on a Windows platform would be:
 
     local mfile = mmap(filename);
-	local data = ffi.cast("uint8_t *", mfile:getPointer());
-
-	local peinfo = peinfo(data, mfile.size);
+	local peinfo = peinfo:fromData(mfile:getPointer(), mfile.size);
 
     Once the peinfo object has been constructed, it will already 
     contain the contents in an easily navigable form.
@@ -19,7 +17,7 @@ local bit = require("bit")
 local band = bit.band;
 
 local binstream = require("pereader.binstream")
-local enums = require("pereader.peenums")
+local peenums = require("pereader.peenums")
 
 
 local peinfo = {}
@@ -275,7 +273,7 @@ function peinfo.readPE32Header(self, ms)
     -- have data in them
     self:readDirectoryTable();
 
-    return self;
+    return self.PEHeader;
 end
 
 function peinfo.readPE32PlusHeader(self, ms)
@@ -320,12 +318,12 @@ function peinfo.readPE32PlusHeader(self, ms)
 
     self:readDirectoryTable();
 
-    return self;
+    return self.PEHeader;
 end
 
 
 function peinfo.readDirectory_Export(self)
-    print("==== readDirectory_Export ====")
+    --print("==== readDirectory_Export ====")
     local dirTable = self.PEHeader.Directories.ExportTable
     if not dirTable then 
         print("NO EXPORT TABLE")
@@ -343,13 +341,10 @@ function peinfo.readDirectory_Export(self)
 
     -- We use the directory entry to lookup the actual export table.
     -- We need to turn the VirtualAddress into an actual file offset
-    --print(string.format("  dirTable.VirtualAddress: 0x%x", dirTable.VirtualAddress))
     local fileOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
-    --print(string.format("  fileOffset: 0x%x", fileOffset))
 
     -- We now know where the actual export table exists, so 
     -- create a binary stream, and position it at the offset
-    --print("   binstream: ", self._data, self._size)
     local ms = binstream(self._data, self._size, fileOffset, true)
 
 
@@ -405,12 +400,17 @@ function peinfo.readDirectory_Export(self)
             --print("Export Function: ", string.format("0x%08X", AddressRVA), section, section.Name)
             local ExportOffset = self:fileOffsetFromRVA(AddressRVA)
 
-            -- If it's an internal function then store the RVA
-            -- functions are not always going to be in the .text
-            -- section, but mostly are.
-            -- Need to come up with a reliable way to determine when
-            -- an RVA is pointing to a forward reference
-            if section and section.Name == '.text' then
+            -- We use the AddressRVA to figure out which section the function
+            -- body is located in.  If that section is not a code scetion, then
+            -- the RVA is actually a pointer to a string, which is a forward
+            -- reference to a function in another .dll
+            -- To figure out whether the section pointed to has code or not, 
+            -- we can use the name '.text', or '.code'
+            -- but, a better approach would be to use the peenums.SectionCharacteristics
+            -- and look for IMAGE_SCN_MEM_EXECUTE, or IMAGE_SCN_CNT_CODE
+            if band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_MEM_EXECUTE) > 0 or
+                band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_CNT_CODE)>0 then
+            --if section and section.Name == '.text' then
                 --table.insert(EATable, ExportOffset);
                 table.insert(EATable, AddressRVA);
             else
@@ -655,23 +655,23 @@ function peinfo.readPEOptionalHeader(self)
     local ms = self.SourceStream;
 
 -- NOTE: Using the sizeOfOptionalHeader, and current offset
-        -- we should be able to get a subrange of the stream to 
-        -- read from.  Not currently doing it.
+-- we should be able to get a subrange of the stream to 
+-- read from.  Not currently doing it.
 
-        -- Read the 2 byte magic for the optional header
-        local pemagic = ms:readBytes(2);
-        --print(string.format("PEMAGIC: 0x%x 0x%x", pemagic[0], pemagic[1]))
+    -- Read the 2 byte magic for the optional header
+    local pemagic = ms:readBytes(2);
+    --print(string.format("PEMAGIC: 0x%x 0x%x", pemagic[0], pemagic[1]))
 
-        -- unwind reading the magic so we can read it again
-        -- as part of reading the whole 'optional' header
-        ms:seek(ms:tell()-2);
+    -- unwind reading the magic so we can read it again
+    -- as part of reading the whole 'optional' header
+    ms:seek(ms:tell()-2);
 
 
-        if IsPe32Header(pemagic) then
-            self:readPE32Header(ms);
-        elseif IsPe32PlusHeader(pemagic) then
-            self:readPE32PlusHeader(ms);
-        end
+    if IsPe32Header(pemagic) then
+        self:readPE32Header(ms);
+    elseif IsPe32PlusHeader(pemagic) then
+        self:readPE32PlusHeader(ms);
+    end
 end 
 
 function peinfo.parse(self, ms)
@@ -706,8 +706,9 @@ function peinfo.parse(self, ms)
     self.PESignature = pesig;
     self.COFF = self:readCOFF();
 
+    --print("COFF, sizeOfOptionalHeader: ", self.COFF.SizeOfOptionalHeader)
     if self.COFF.SizeOfOptionalHeader > 0 then
-        self.PEHeader = self:readPEOptionalHeader();
+        self:readPEOptionalHeader();
     end
 
     -- Now offset should be positioned at the section table

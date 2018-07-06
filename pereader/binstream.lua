@@ -14,7 +14,7 @@
 local ffi = require("ffi")
 local bit = require("bit")
 local bor, lshift = bit.bor, bit.lshift
-
+local min = math.min
 
 --[[
     Standard 'object' construct.
@@ -56,21 +56,28 @@ function tt_memstream.new(self, data, size, position, littleendian)
     return self:init(data, size, position, littleendian);
 end
 
- -- move to a particular position, in bytes
-function tt_memstream.seek(self, pos)
-    assert(not (pos > self.size or pos < 0));
-    --b.cursor = (o > b.size or o < 0) ? b.size : o;
-     if (pos > self.size or pos < 0) then 
-         self.cursor = self.size
-     else
-         self.cursor = pos;
-     end
- 
-     return true;
+-- report how many bytes remain to be read
+-- from stream
+function tt_memstream.remaining(self)
+    return tonumber(self.size - self.cursor)
 end
 
+ -- move to a particular position, in bytes
+function tt_memstream.seek(self, pos)
+    -- if position specified outside of range
+    -- just set it past end of stream
+    if (pos > self.size)  or (pos < 0) then
+        self.cursor = self.size
+        return false, self.cursor;
+    else
+        self.cursor = pos;
+    end
+ 
+    return true;
+end
+
+
 -- Report the current cursor position.
--- Good for finding out the size of something
 function tt_memstream.tell(self)
     return self.cursor;
 end
@@ -78,14 +85,19 @@ end
 
 -- move the cursor ahead by the amount
 -- specified in the offset
- function tt_memstream.skip(self, offset)
+-- seek, relative to current position
+function tt_memstream.skip(self, offset)
     --print("SKIP: ", offset)
      return self:seek(self.cursor + offset);
- end
- 
+end
+
+
+
+--[[
 function tt_memstream.skipToEven(self)
     self:skip(self.cursor % 2);
 end
+--]]
 
 -- get 8 bits, and don't advance the cursor
 function tt_memstream.peek8(self)
@@ -102,21 +114,24 @@ end
 function tt_memstream.read8(self)
     --print("self.cursor: ", self.cursor, self.size)
     if (self.cursor >= self.size) then
-       return false;
+       return false, "EOF";
     end
 
-    local r = self.data[self.cursor];
     self.cursor = self.cursor + 1;
     
-    return r
+    return self.data[self.cursor-1]
  end
  
-  -- get as many bytes specified in n as an integer
+-- get as many bytes specified in n as an integer
  -- this could possibly work up to 7 byte integers
  -- converts from big endian to native format while it goes
 function tt_memstream.read(self, n)
     local v = 0;
     local i = 0;
+
+    if self:remaining() < n then
+        return false, "NOT ENOUGH DATA AVAILABLE"
+    end
 
     if self.bigend then
         while  (i < n) do
@@ -138,13 +153,23 @@ function tt_memstream.readNumber(self, n)
 end
 
 -- BUGBUG, do error checking against end of stream
-function tt_memstream.readBytes(self, n)
+function tt_memstream.readBytes(self, n, bytes)
     if n < 1 then return false, "must specify more then 0 bytes" end
 
-    local bytes = ffi.new("uint8_t[?]", n)
-    ffi.copy(bytes, self.data+self.cursor, n)
-    self.cursor = self.cursor + n;
-    
+    -- see how many bytes are remaining to be read
+    local nActual = min(n, self:remaining())
+
+    -- read the minimum between remaining and 'n'
+    bytes = bytes or ffi.new("uint8_t[?]", nActual)
+    ffi.copy(bytes, self.data+self.cursor, nActual)
+    self:skip(n)
+
+    -- if minimum is less than n, return false, and the number
+    -- actually read
+    if nActual < n then
+        return false, nActual;
+    end
+
     return bytes;
 end
 
