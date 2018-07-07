@@ -106,12 +106,6 @@ function peinfo.fileOffsetFromRVA(self, rva)
     return fileOffset
 end
 
-
---[[]
-    Now for the actual parsing of the data stream
-]]
-
-
 function peinfo.readDOSHeader(self)
     local ms = self.SourceStream;
     local e_magic = ms:readBytes(2);    -- Magic number, must be 'MZ'
@@ -389,15 +383,16 @@ function peinfo.readDirectory_Export(self)
 --]]
 
     -- Get the function pointers
-    local EATable = {}; -- ffi.new("uint32_t[?]", res.NumberOfFunctions)
+    local EATable = {}  -- ffi.new("uint32_t[?]", res.NumberOfFunctions)
     if res.NumberOfFunctions > 0 then
         local EATOffset = self:fileOffsetFromRVA(res.AddressOfFunctions);
         local EATStream = binstream(self._data, self._size, EATOffset, true);
 
-        for i=1, res.NumberOfFunctions do 
+        -- Get array of function pointers
+        -- EATable represents a '0' based array of these function RVAs
+        for i=0, res.NumberOfFunctions-1 do 
             local AddressRVA = EATStream:readUInt32()
             local section = self:GetEnclosingSectionHeader(AddressRVA)
-            --print("Export Function: ", string.format("0x%08X", AddressRVA), section, section.Name)
             local ExportOffset = self:fileOffsetFromRVA(AddressRVA)
 
             -- We use the AddressRVA to figure out which section the function
@@ -412,11 +407,13 @@ function peinfo.readDirectory_Export(self)
                 band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_CNT_CODE)>0 then
             --if section and section.Name == '.text' then
                 --table.insert(EATable, ExportOffset);
-                table.insert(EATable, AddressRVA);
+                --table.insert(EATable, AddressRVA);
+                EATable[i] = AddressRVA;
             else
                 local ForwardStream = binstream(self._data, self._size, ExportOffset, true)
                 local forwardName = ForwardStream:readString();
-                table.insert(EATable, forwardName)
+                --table.insert(EATable, forwardName)
+                EATable[i] = forwardName;
             end
         end
     end

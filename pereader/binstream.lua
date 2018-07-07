@@ -20,23 +20,23 @@ local min = math.min
     Standard 'object' construct.
     __call is implemented so we get a 'constructor'
     sort of feel:
-    tt_memstream(data, size, position)
+    binstream(data, size, position)
 ]]
-local tt_memstream = {
+local binstream = {
     bigend = true;
 }
-setmetatable(tt_memstream, {
+setmetatable(binstream, {
 		__call = function(self, ...)
 		return self:new(...)
 	end,
 })
 
-local tt_memstream_mt = {
-	__index = tt_memstream;
+local binstream_mt = {
+	__index = binstream;
 }
 
 
-function tt_memstream.init(self, data, size, position, littleendian)
+function binstream.init(self, data, size, position, littleendian)
     position = position or 0
 
     assert(size > 0);
@@ -48,22 +48,22 @@ function tt_memstream.init(self, data, size, position, littleendian)
         cursor = position;
     }
  
-    setmetatable(obj, tt_memstream_mt)
+    setmetatable(obj, binstream_mt)
     return obj
 end
 
-function tt_memstream.new(self, data, size, position, littleendian)
+function binstream.new(self, data, size, position, littleendian)
     return self:init(data, size, position, littleendian);
 end
 
 -- report how many bytes remain to be read
 -- from stream
-function tt_memstream.remaining(self)
+function binstream.remaining(self)
     return tonumber(self.size - self.cursor)
 end
 
  -- move to a particular position, in bytes
-function tt_memstream.seek(self, pos)
+function binstream.seek(self, pos)
     -- if position specified outside of range
     -- just set it past end of stream
     if (pos > self.size)  or (pos < 0) then
@@ -78,7 +78,7 @@ end
 
 
 -- Report the current cursor position.
-function tt_memstream.tell(self)
+function binstream.tell(self)
     return self.cursor;
 end
 
@@ -86,7 +86,7 @@ end
 -- move the cursor ahead by the amount
 -- specified in the offset
 -- seek, relative to current position
-function tt_memstream.skip(self, offset)
+function binstream.skip(self, offset)
     --print("SKIP: ", offset)
      return self:seek(self.cursor + offset);
 end
@@ -94,13 +94,13 @@ end
 
 
 --[[
-function tt_memstream.skipToEven(self)
+function binstream.skipToEven(self)
     self:skip(self.cursor % 2);
 end
 --]]
 
 -- get 8 bits, and don't advance the cursor
-function tt_memstream.peek8(self)
+function binstream.peek8(self)
     if (self.cursor >= self.size) then
         return false;
     end
@@ -111,7 +111,7 @@ end
 
 
 -- get 8 bits, and advance the cursor
-function tt_memstream.read8(self)
+function binstream.read8(self)
     --print("self.cursor: ", self.cursor, self.size)
     if (self.cursor >= self.size) then
        return false, "EOF";
@@ -125,7 +125,7 @@ function tt_memstream.read8(self)
 -- get as many bytes specified in n as an integer
  -- this could possibly work up to 7 byte integers
  -- converts from big endian to native format while it goes
-function tt_memstream.read(self, n)
+function binstream.read(self, n)
     local v = 0;
     local i = 0;
 
@@ -148,12 +148,12 @@ function tt_memstream.read(self, n)
     return v;
 end
 
-function tt_memstream.readNumber(self, n)
+function binstream.readNumber(self, n)
     return tonumber(self:read(n));
 end
 
 -- BUGBUG, do error checking against end of stream
-function tt_memstream.readBytes(self, n, bytes)
+function binstream.readBytes(self, n, bytes)
     if n < 1 then return false, "must specify more then 0 bytes" end
 
     -- see how many bytes are remaining to be read
@@ -176,7 +176,7 @@ end
 -- Read a null terminated ASCIIZ string
 -- do not read more than 'n' bytes
 -- advance the cursor by actual bytes read
-function tt_memstream.readASCIIZ(self, n)
+function binstream.readASCIIZ(self, n)
     n = n or 0
     if n < 1 then return ; end
     local bytes = ffi.new("uint8_t[?]", n+1)
@@ -191,7 +191,7 @@ function tt_memstream.readASCIIZ(self, n)
 end
 
 
-function tt_memstream.readString(self, n)
+function binstream.readString(self, n)
     local str = nil;
     if not n then
         str = ffi.string(self.data+self.cursor)
@@ -204,46 +204,46 @@ function tt_memstream.readString(self, n)
     return str;
 end
 
-function tt_memstream.read16(self)  
+function binstream.read16(self)  
      return self:read(2)
 end
 
-function tt_memstream.read32(self)  
+function binstream.read32(self)  
     return tonumber(self:read(4))
 end
 
 -- These ensure the sign is dealth with properly
-function tt_memstream.readInt8(self)
+function binstream.readInt8(self)
     return tonumber(ffi.cast('int8_t', self:read(1)))
 end
 
-function tt_memstream.readUInt8(self)
+function binstream.readUInt8(self)
     return tonumber(ffi.cast('uint8_t', self:read(1)))
 end
 
-function tt_memstream.readInt16(self)
+function binstream.readInt16(self)
     return tonumber(ffi.cast('int16_t', self:read(2)))
 end
 
-function tt_memstream.readUInt16(self)
+function binstream.readUInt16(self)
     return tonumber(ffi.cast('uint16_t', self:read(2)))
 end
 
 
 
-function tt_memstream.readInt32(self)
+function binstream.readInt32(self)
     return tonumber(ffi.cast('int32_t', self:read(4)))
 end
 
-function tt_memstream.readUInt32(self)
+function binstream.readUInt32(self)
     return tonumber(ffi.cast('uint32_t', self:read(4)))
 end
 
-function tt_memstream.readInt64(self)
+function binstream.readInt64(self)
     return tonumber(ffi.cast('int64_t', self:read(8)))
 end
 
-function tt_memstream.readUInt64(self)
+function binstream.readUInt64(self)
     local v = 0ULL;
     --ffi.cast("uint64_t", 0);
     local i = 0;
@@ -271,31 +271,31 @@ function tt_memstream.readUInt64(self)
 end
 
 
-function tt_memstream.readFixed(self)
+function binstream.readFixed(self)
     local decimal = self:readInt16();
     local fraction = self:readUInt16();
 
     return decimal + fraction / 65535;
 end
 
-function tt_memstream.readF2Dot14(self)
+function binstream.readF2Dot14(self)
     return self:readInt16() / 16384;
 end
 
 -- get a subrange of the memory stream
 -- returning a new memory stream
-function tt_memstream.range(self, pos, s)
+function binstream.range(self, pos, s)
     if ((pos < 0) or (s < 0) or (pos > self.size) or (s > (self.size - o))) then 
         return nil;
     end
 
-    return tt_memstream(self.data+pos, 0, s)
+    return binstream(self.data+pos, 0, s)
 end
 
 -- Convenient types named in the documentation
-tt_memstream.readFWord = tt_memstream.readInt16;
-tt_memstream.readUFWord = tt_memstream.readUInt16;
-tt_memstream.readOffset16 = tt_memstream.readUInt16;
-tt_memstream.readOffset32 = tt_memstream.readUInt32;
+binstream.readFWord = binstream.readInt16;
+binstream.readUFWord = binstream.readUInt16;
+binstream.readOffset16 = binstream.readUInt16;
+binstream.readOffset32 = binstream.readUInt32;
 
-return tt_memstream
+return binstream

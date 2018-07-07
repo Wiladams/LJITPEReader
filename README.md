@@ -84,6 +84,8 @@ bs:skip(2*10)       -- skip some 'reserved' data
 local bytes = bs:readBytes(8)
 ```
 
+Using this stream processing approach is in comparison to using a data structure mapping approach.  That is, you could define a bunch of 'C' structs, and just overlay the file atop those.  This was the first approach used in this project.  There are a couple of drawbacks to that approach.  First, it will only work as long as you're reading the files on a machine with the same endianness as the one the files were generated for.  Second, there is enough processing and variance that you need to make adjustments along the way.  Therefore, it was deemed that an approach that relies on code rather than data structures, would be a more explicit and efficient approach.
+
 Another bit of magic that happens behind the scenes is dealing with RVA (Relative Virtual Address).  This is probably the biggest paid of dealing with the PE file format.  The RVA is essentially a way for the 'loader' or any other tool, to determine where something is located within the file without using a fixed offset.  The RVA points to a place with a particular section, and that section's actual location within the file, or within memory after loaded, could change.
 
 The peinfo object has the convenient `peinfo.fileOffsetFromRVA(self, rva)` which will give you back a value which is an offset within the file.  This offset can be used with the binstream to 'seek' to a particular position.  This is done behind the scenes, for example to get the export names within the file.  You can further use this function to locate the actual body of a function within the file, and do what you will with that information.
@@ -130,4 +132,5 @@ You can position the binstream at the location you desire, and go from there as 
 
 **References**
 * [Microsoft Documentation]https://msdn.microsoft.com/library/windows/desktop/ms680547(v=vs.85).aspx
+* [Ancient Wisdom] http://net.pku.edu.cn/~course/cs201/2003/mirrorWebster.cs.ucr.edu/Page_TechDocs/pe.txt
 * [Tutorial]http://www.sunshine2k.de/reversing/tuts/tut_rvait.htm

@@ -11,9 +11,11 @@ local function printHex(ms, buffer, offsetbits, iterations)
 
     if offsetbits == 32 then
         print("Offset (h)  00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F  Decoded text")
+        print("------------------------------------------------------------------------------")
 
     elseif offsetbits > 32 then
         print("        Offset (h)  00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F  Decoded text")
+        print("--------------------------------------------------------------------------------------")
     end
 
     local iteration = 0
