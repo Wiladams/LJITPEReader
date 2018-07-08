@@ -578,13 +578,68 @@ function peinfo.readDirectory_Import(self)
     return res;
 end
 
+function peinfo.readDirectory_Resource(self)
+    -- lookup resource directory entry
+    local dirTable = self.PEHeader.Directories.ResourceTable
+    if not dirTable then 
+        return false, "ResourceTable directory not found" 
+    end
+    
+    -- Get associated section
+    local resourcedirectoryOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
+    --local bs = binstream(self._data, self._size, resourcedirectoryOffset, true)
+    local bs = self.SourceStream:range(dirTable.Size, resourcedirectoryOffset)
+    local function readResourceDirectory(bs, id)
+        local res = {
+            id = id;
+            Characteristics = bs:readUInt32();          -- 0
+            TimeDateStamp = bs:readUInt32();            -- 4
+            MajorVersion = bs:readUInt16();             -- 8
+            MinorVersion = bs:readUInt16();             -- 10
+            NumberOfNamedEntries = bs:readUInt16();     -- 12
+            NumberOfIdEntries = bs:readUInt16();        -- 14, 16
+        }
 
-function peinfo.readDirectories(self)
+        res.Entries = {}
+
+        local cnt = 0;
+        while (cnt < res.NumberOfNamedEntries) do
+
+            local entry = {
+                first = bs:readUInt32();
+                second = bs:readUInt32();
+            }
+            table.insert(res.Entries, entry)
+            cnt = cnt + 1;
+        end
+
+        cnt = 0;
+        while (cnt < res.NumberOfIdEntries) do
+            local entry = {
+                first = bs:readUInt32();
+                second = bs:readUInt32();
+            }
+            table.insert(res.Entries, entry)
+            cnt = cnt + 1;
+        end
+
+        return res;
+    end
+
+    self.Resources = readResourceDirectory(bs);
+
+
+
+
+end
+
+
+function peinfo.readDirectoryData(self)
     self.Directories = self.Directories or {}
     
     self:readDirectory_Export();
     self:readDirectory_Import();
-
+    self:readDirectory_Resource();
 end
 
 local function stringFromBuff(buff, size)
@@ -713,7 +768,7 @@ function peinfo.parse(self, ms)
 
     -- Now that we have section information, we should
     -- be able to read detailed directory information
-    self:readDirectories()
+    self:readDirectoryData()
 
     return self
 end

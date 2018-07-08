@@ -147,6 +147,24 @@ local function printExports(reader)
 	print("---------------------")
 end
 
+local function printResources(info)
+	print("==== RESOURCES ====")
+	if not info.Resources then
+		print("  NO RESOURCES ")
+		return false;
+	end
+
+	print("Characteristics: ", info.Resources.Characteristics);
+	print("Time Date Stamp: ", info.Resources.TimeDateStamp);
+	print("Version: ", info.Resources.MajorVersion, info.Resources.MinorVersion);
+	print("Named Entries: ", info.Resources.NumberOfNamedEntries);
+	print("Id Entries: ", info.Resources.NumberOfIdEntries);
+	print("== Entries ==")
+	for i, entry in ipairs(info.Resources.Entries) do
+		print(string.format("0x%x, 0x%x", entry.first, entry.second))
+	end
+end
+
 
 local function main()
 	local mfile = mmap(filename);
@@ -169,6 +187,7 @@ local function main()
 	printSectionHeaders(info)
 	printImports(info)
 	printExports(info)
+	printResources(info)
 end
 
 main()

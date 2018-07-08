@@ -38,7 +38,7 @@ local binstream_mt = {
 
 function binstream.init(self, data, size, position, littleendian)
     position = position or 0
-
+--print("SIZE: ", data, size, position, littleendian)
     assert(size > 0);
 
     local obj = {
@@ -284,12 +284,14 @@ end
 
 -- get a subrange of the memory stream
 -- returning a new memory stream
-function binstream.range(self, pos, s)
-    if ((pos < 0) or (s < 0) or (pos > self.size) or (s > (self.size - o))) then 
-        return nil;
+function binstream.range(self, size, pos)
+    pos = pos or self.cursor;
+
+    if ((pos < 0) or (size < 0) or (pos > self.size) or (size > (self.size - pos))) then 
+        return false;
     end
 
-    return binstream(self.data+pos, 0, s)
+    return binstream(self.data+pos, size, 0 , not self.bigend)
 end
 
 -- Convenient types named in the documentation
