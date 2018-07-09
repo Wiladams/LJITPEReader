@@ -131,19 +131,39 @@ end
 
 local function printExports(reader)
 	print("===== EXPORTS =====")
-	if (not reader.Exports) then
+	if (not reader.Export) then
 		print("  NO EXPORTS")
 		return ;
 	end
 
 	print("Module Name: ", reader.ModuleName)
-	for i, entry in ipairs(reader.Exports) do
+	print(" = All Functions =")
+	for k,v in pairs(reader.Export.AllFunctions) do
+		if tonumber(v) then
+			print (k, string.format("0x%x", v))
+		else
+			print(k, v)
+		end
+	end
+
+	print(" = Ordinal Only = ")
+	for k,v in pairs(reader.Export.OrdinalOnly) do
+		if type(v) == "string" then
+			print(k, v)
+		else
+			print (k, string.format("0x%x", v))
+		end
+	end
+
+	print(" = Named Functions =")
+	for i, entry in ipairs(reader.Export.NamedFunctions) do
 		if type(entry.funcptr) == "string" then
 			print(string.format("%4d %4d %50s %s",entry.ordinal, entry.hint, entry.name, entry.funcptr))
 		else 
 			print(string.format("%4d %4d %50s %s",entry.ordinal, entry.hint, entry.name, string.format("0x%08X", entry.funcptr or 0)))
 		end
 	end
+
 	print("---------------------")
 end
 

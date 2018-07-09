@@ -324,7 +324,7 @@ function peinfo.readDirectory_Export(self)
         return false 
     end
 
-    self.Exports = {}
+    self.Export = {}
 
     -- If the virtual address is zero, then we don't actually
     -- have any exports
@@ -383,7 +383,8 @@ function peinfo.readDirectory_Export(self)
 --]]
 
     -- Get the function pointers
-    local EATable = {}  -- ffi.new("uint32_t[?]", res.NumberOfFunctions)
+    --local EATable = {}  -- ffi.new("uint32_t[?]", res.NumberOfFunctions)
+    self.Export.AllFunctions = {};
     if res.NumberOfFunctions > 0 then
         local EATOffset = self:fileOffsetFromRVA(res.AddressOfFunctions);
         local EATStream = binstream(self._data, self._size, EATOffset, true);
@@ -400,85 +401,91 @@ function peinfo.readDirectory_Export(self)
             if AddressRVA ~= 0 then
                 local section = self:GetEnclosingSectionHeader(AddressRVA)
                 local ExportOffset = self:fileOffsetFromRVA(AddressRVA)
---[[
-                if (section) then
-                    print("   Section Name: ", section.Name)
-                else
-                    print("   Section: UNKNOWN")
-                end
 
-                print("Address Offset: ", ExportOffset);
-                --print("Address Offset: ", string.format("0x%08X", ExportOffset));
---]]
-            -- We use the AddressRVA to figure out which section the function
-            -- body is located in.  If that section is not a code section, then
-            -- the RVA is actually a pointer to a string, which is a forward
-            -- reference to a function in another .dll
-            -- To figure out whether the section pointed to has code or not, 
-            -- we can use the name '.text', or '.code'
-            -- but, a better approach would be to use the peenums.SectionCharacteristics
-            -- and look for IMAGE_SCN_MEM_EXECUTE, or IMAGE_SCN_CNT_CODE
+                -- We use the AddressRVA to figure out which section the function
+                -- body is located in.  If that section is not a code section, then
+                -- the RVA is actually a pointer to a string, which is a forward
+                -- reference to a function in another .dll
+                
+                -- To figure out whether the section pointed to has code or not, 
+                -- we can use the name '.text', or '.code'
+                -- but, a better approach is to use the peenums.SectionCharacteristics
+                -- and look for IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_READ and IMAGE_SCN_CNT_CODE
                 if section then
                     --print("   Section Name: ", section.Name)
                     -- Check to see if the section the RVA points to is actually
                     -- a code section.  If it is, then save the Address
                     if band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_MEM_EXECUTE) ~= 0 and
+                        band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_MEM_READ)~=0  and
                         band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_CNT_CODE)~=0 then
 
-                        EATable[i] = AddressRVA;
+                        self.Export.AllFunctions[i] = AddressRVA;
                     else
-                        -- If not a code section, then it must be a forwarer
+                        -- If not a code section, then it must be a forwarder
                         local ForwardStream = binstream(self._data, self._size, ExportOffset, true)
                         local forwardName = ForwardStream:readString();
-                        print("FORWARD: ", forwardName)
-                        EATable[i] = forwardName;
+                        --print("FORWARD: ", forwardName)
+                        self.Export.AllFunctions[i] = forwardName;
                     end
                 else
                     print("NO SECTION FOUND for AdressRVA:  ", i)
                 end
             else
-                EATable[i] = false;
+                --EATable[i] = false;
             end
         end
     end
 
-    -- This should be changed around a bit.
-    -- There should essentially be two Export tables
-    -- 1) Contains all the names, pointing back at the function pointers
-    -- 2) Another contains all the functions, based on entry, with address, and forwarder
-    -- As some of '2' will be '0', those entries should exist with a position, and 'isFunction == false'
     -- Get the names if the Names array exists
+    self.Export.NamedFunctions = {}
     if res.NumberOfNames > 0 then
-        local NamesArrayOffset = self:fileOffsetFromRVA(res.AddressOfNames)
-        local NamesArrayStream = binstream(self._data, self._size, NamesArrayOffset, true);
-        --NamesArrayStream:seek(NamesArrayOffset);
+        local ENTOffset = self:fileOffsetFromRVA(res.AddressOfNames)
+        local ENTStream = binstream(self._data, self._size, ENTOffset, true);
 
         -- Setup a stream for the AddressOfNameOrdinals (EOT) table
         local EOTOffset = self:fileOffsetFromRVA(res.AddressOfNameOrdinals);
         local EOTStream = binstream(self._data, self._size, EOTOffset, true);
-        --EOTStream:seek(EOTOffset);
 
-
+        -- create a stream we'll use repeatedly to read name values
+        local nameStream = binstream(self._data, self._size, 0, true);
+        
         for i=1, res.NumberOfNames do
             -- create a stream pointing at the specific name
-            local nameRVA = NamesArrayStream:readUInt32();
+            local nameRVA = ENTStream:readUInt32();
             local nameOffset = self:fileOffsetFromRVA(nameRVA)
-            local nameStream = binstream(self._data, self._size, nameOffset, true);
---nameStream:seek(nameOffset);
+            nameStream:seek(nameOffset)
 
             local name = nameStream:readString();
             local hint = EOTStream:readUInt16();
             local ordinal = hint + dirTable.nBase;
-            local funcptr = EATable[ordinal];
+            local index = hint;
+            --local funcptr = self.Export.AllFunctions[ordinal];
+            local funcptr = self.Export.AllFunctions[index];
 
             --print("  name: ", ordinal, name)
-            table.insert(self.Exports, {name = name, hint=hint, ordinal = ordinal , funcptr=funcptr})
-            --self.Exports[name] = true;    -- put extended info in here, like ordinal, and func ptr
+            table.insert(self.Export.NamedFunctions, {name = name, hint=hint, ordinal = ordinal , index = index, funcptr=funcptr})
         end
     end
 
+    -- Maybe a third one that shows only the functions that are exported by ordinal
+    -- Those are functions that are not pointed to by any name
+    local function nameByIndex(index)
+        for i, entry in ipairs(self.Export.NamedFunctions) do
+            if entry.index == index then
+                return entry;
+            end
+        end
+        return false;
+    end
 
-    return self.Exports;
+    self.Export.OrdinalOnly = {}
+    for index, value in pairs(self.Export.AllFunctions) do
+        if not nameByIndex(index) then
+            self.Export.OrdinalOnly[index] = value;
+        end
+	end
+
+    return self.Export;
 end
 
 local IMAGE_ORDINAL_FLAG32 = 0x80000000
