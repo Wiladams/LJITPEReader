@@ -488,6 +488,7 @@ function peinfo.readDirectory_Export(self)
 end
 
 local IMAGE_ORDINAL_FLAG32 = 0x80000000
+local IMAGE_ORDINAL_FLAG64 = 0x8000000000000000ULL;
 
 function peinfo.readDirectory_Import(self)
     --print("==== readDirectory_Import ====")
@@ -570,7 +571,7 @@ function peinfo.readDirectory_Import(self)
                 local ThunkDataRVA = 0ULL;
                 if self.isPE32Plus then
                         --print("PE32Plus")
-                        ThunkDataRVA = ThunkArrayStream:readUInt64();
+                    ThunkDataRVA = ThunkArrayStream:readUInt64();
                         --print("ThunkDataRVA(64): ", ThunkDataRVA)
                 else
                     ThunkDataRVA = ThunkArrayStream:readUInt32();
@@ -584,11 +585,26 @@ function peinfo.readDirectory_Import(self)
 
                 local ThunkDataOffset = self:fileOffsetFromRVA(ThunkDataRVA)
 
-                --if band(ThunkDataRVA, IMAGE_ORDINAL_FLAG32) ~= 0 then
+                local asOrdinal = false;
+                local ordinal = 0;
+
+                if self.isPE32Plus then
+                    if band(ThunkDataRVA, IMAGE_ORDINAL_FLAG64) ~= 0 then
+                        asOrdinal = true;
+                        ordinal = band(0x7fffffffffffffff, ThunkDataRVA)
+                    end
+                else
+                    if band(ThunkDataRVA, IMAGE_ORDINAL_FLAG32) ~= 0 then
+                        asOrdinal = true;
+                        ordinal = band(0x7fffffff, ThunkDataRVA)
+                    end
+                end 
+
                 -- Check for Ordinal only import
                 -- must be mindful of 32/64-bit
-                if (false) then
-                        print("** IMPORT ORDINAL!! **")
+                if (asOrdinal) then
+                    print("** IMPORT ORDINAL!! **")
+                    table.insert(self.Imports[res.DllName], ordinal)
                 else
                     -- Read the entries in the nametable
                     local HintNameStream = binstream(self._data, self._size, ThunkDataOffset, true);
