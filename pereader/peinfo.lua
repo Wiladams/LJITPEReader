@@ -487,11 +487,14 @@ function peinfo.readDirectory_Export(self)
     return self.Export;
 end
 
-local IMAGE_ORDINAL_FLAG32 = 0x80000000
-local IMAGE_ORDINAL_FLAG64 = 0x8000000000000000ULL;
+
 
 function peinfo.readDirectory_Import(self)
+
     --print("==== readDirectory_Import ====")
+    local IMAGE_ORDINAL_FLAG32 = 0x80000000
+    local IMAGE_ORDINAL_FLAG64 = 0x8000000000000000ULL;
+    
     self.Imports = {}
     local dirTable = self.PEHeader.Directories.ImportTable
     if not dirTable then return false end
@@ -587,23 +590,24 @@ function peinfo.readDirectory_Import(self)
 
                 local asOrdinal = false;
                 local ordinal = 0;
-
+                -- ordinal is indicated if high order bit is set
+                -- then the ordinal itself is in the lower 16 bits
                 if self.isPE32Plus then
                     if band(ThunkDataRVA, IMAGE_ORDINAL_FLAG64) ~= 0 then
                         asOrdinal = true;
-                        ordinal = band(0x7fffffffffffffff, ThunkDataRVA)
+                        ordinal = tonumber(band(0xffff, ThunkDataRVA))
                     end
                 else
                     if band(ThunkDataRVA, IMAGE_ORDINAL_FLAG32) ~= 0 then
                         asOrdinal = true;
-                        ordinal = band(0x7fffffff, ThunkDataRVA)
+                        ordinal = tonumber(band(0xffff, ThunkDataRVA))
                     end
                 end 
 
                 -- Check for Ordinal only import
                 -- must be mindful of 32/64-bit
                 if (asOrdinal) then
-                    print("** IMPORT ORDINAL!! **")
+                    --print("** IMPORT ORDINAL!! **")
                     table.insert(self.Imports[res.DllName], ordinal)
                 else
                     -- Read the entries in the nametable
@@ -612,7 +616,7 @@ function peinfo.readDirectory_Import(self)
                     local hint = HintNameStream:readUInt16();
                     local actualName = HintNameStream:readString();
 
-                    print(string.format("\t0x%04x %s", hint, actualName))
+                    --print(string.format("\t0x%04x %s", hint, actualName))
                     table.insert(self.Imports[res.DllName], actualName);
                 end
             end
