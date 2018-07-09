@@ -317,7 +317,7 @@ end
 
 
 function peinfo.readDirectory_Export(self)
-    --print("==== readDirectory_Export ====")
+    print("==== readDirectory_Export ====")
     local dirTable = self.PEHeader.Directories.ExportTable
     if not dirTable then 
         print("NO EXPORT TABLE")
@@ -370,16 +370,16 @@ function peinfo.readDirectory_Export(self)
         --print("Module Name: ", res.ModuleName)
     end 
 
---[[
-    print("        Export Flags: ", res.Characteristics)
-    print("               nName: ", string.format("0x%X",res.nName))
+---[[
+    print("        Export Flags: ", string.format("0x%08X", res.Characteristics))
+    print("               nName: ", string.format("0x%08X",res.nName))
     print("         Module Name: ", self.ModuleName)
     print("        Ordinal Base: ", res.nBase)
     print("   NumberOfFunctions: ", res.NumberOfFunctions);
     print("       NumberOfNames: ", res.NumberOfNames);
-    print("  AddressOfFunctions: ", res.AddressOfFunctions);
-    print("      AddressOfNames: ", res.AddressOfNames);
-    print("AddressOfNameOrdinals: ", string.format("0x%X", res.AddressOfNameOrdinals));
+    print("  AddressOfFunctions: ", string.format("0x%08X",res.AddressOfFunctions));
+    print("      AddressOfNames: ", string.format("0x%08X",res.AddressOfNames));
+    print("AddressOfNameOrdinals: ", string.format("0x%08X", res.AddressOfNameOrdinals));
 --]]
 
     -- Get the function pointers
@@ -388,36 +388,65 @@ function peinfo.readDirectory_Export(self)
         local EATOffset = self:fileOffsetFromRVA(res.AddressOfFunctions);
         local EATStream = binstream(self._data, self._size, EATOffset, true);
 
+        print("EATOffset: ", string.format("0x%08X", EATOffset))
+
         -- Get array of function pointers
         -- EATable represents a '0' based array of these function RVAs
         for i=0, res.NumberOfFunctions-1 do 
             local AddressRVA = EATStream:readUInt32()
-            local section = self:GetEnclosingSectionHeader(AddressRVA)
-            local ExportOffset = self:fileOffsetFromRVA(AddressRVA)
+            
+            --print("----------------")
+            --print("    AddressRVA: ", string.format("0x%08X",AddressRVA));
+            if AddressRVA ~= 0 then
+                local section = self:GetEnclosingSectionHeader(AddressRVA)
+                local ExportOffset = self:fileOffsetFromRVA(AddressRVA)
+--[[
+                if (section) then
+                    print("   Section Name: ", section.Name)
+                else
+                    print("   Section: UNKNOWN")
+                end
 
+                print("Address Offset: ", ExportOffset);
+                --print("Address Offset: ", string.format("0x%08X", ExportOffset));
+--]]
             -- We use the AddressRVA to figure out which section the function
-            -- body is located in.  If that section is not a code scetion, then
+            -- body is located in.  If that section is not a code section, then
             -- the RVA is actually a pointer to a string, which is a forward
             -- reference to a function in another .dll
             -- To figure out whether the section pointed to has code or not, 
             -- we can use the name '.text', or '.code'
             -- but, a better approach would be to use the peenums.SectionCharacteristics
             -- and look for IMAGE_SCN_MEM_EXECUTE, or IMAGE_SCN_CNT_CODE
-            if band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_MEM_EXECUTE) > 0 or
-                band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_CNT_CODE)>0 then
-            --if section and section.Name == '.text' then
-                --table.insert(EATable, ExportOffset);
-                --table.insert(EATable, AddressRVA);
-                EATable[i] = AddressRVA;
+                if section then
+                    --print("   Section Name: ", section.Name)
+                    -- Check to see if the section the RVA points to is actually
+                    -- a code section.  If it is, then save the Address
+                    if band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_MEM_EXECUTE) ~= 0 and
+                        band(section.Characteristics, peenums.SectionCharacteristics.IMAGE_SCN_CNT_CODE)~=0 then
+
+                        EATable[i] = AddressRVA;
+                    else
+                        -- If not a code section, then it must be a forwarer
+                        local ForwardStream = binstream(self._data, self._size, ExportOffset, true)
+                        local forwardName = ForwardStream:readString();
+                        print("FORWARD: ", forwardName)
+                        EATable[i] = forwardName;
+                    end
+                else
+                    print("NO SECTION FOUND for AdressRVA:  ", i)
+                end
             else
-                local ForwardStream = binstream(self._data, self._size, ExportOffset, true)
-                local forwardName = ForwardStream:readString();
-                --table.insert(EATable, forwardName)
-                EATable[i] = forwardName;
+                EATable[i] = false;
             end
         end
     end
 
+    -- This should be changed around a bit.
+    -- There should essentially be two Export tables
+    -- 1) Contains all the names, pointing back at the function pointers
+    -- 2) Another contains all the functions, based on entry, with address, and forwarder
+    -- As some of '2' will be '0', those entries should exist with a position, and 'isFunction == false'
     -- Get the names if the Names array exists
     if res.NumberOfNames > 0 then
         local NamesArrayOffset = self:fileOffsetFromRVA(res.AddressOfNames)
@@ -455,7 +484,7 @@ end
 local IMAGE_ORDINAL_FLAG32 = 0x80000000
 
 function peinfo.readDirectory_Import(self)
-    --print("==== readDirectory_Import ====")
+    print("==== readDirectory_Import ====")
     self.Imports = {}
     local dirTable = self.PEHeader.Directories.ImportTable
     if not dirTable then return false end
@@ -505,10 +534,10 @@ function peinfo.readDirectory_Import(self)
             -- use a separate stream to read the string so we don't
             -- upset the positioning on the one that's reading
             -- the import descriptors
-            local ns = binstream(self._data, self._size, 0, true)
-            ns:seek(Name1Offset)
+            local ns = binstream(self._data, self._size, Name1Offset, true)
+
             res.DllName = ns:readString();
-            --print("DllName: ", res.DllName)
+            print("DllName: ", res.DllName)
             self.Imports[res.DllName] = {};
         end 
 
@@ -523,31 +552,25 @@ function peinfo.readDirectory_Import(self)
 
 
 		if (thunkRVA ~= 0) then
-            local ThunkArrayOffset = self:fileOffsetFromRVA(thunkRVA);
+            local thunkRVAOffset = self:fileOffsetFromRVA(thunkRVA);
 --print(string.format("ThunkRVA: 0x%08X (0x%08X)", thunkRVA, ThunkArrayOffset))
 
             -- this will point to an array of IMAGE_THUNK_DATA objects
             -- so create a separate stream to read them
-            local ThunkArrayStream = binstream(self._data, self._size, 0, true)
-            ThunkArrayStream:seek(ThunkArrayOffset)
-
-            --local thunkIATOffset = self:fileOffsetFromRVA(thunkIATRVA);
-            --ms:seek(thunkIATOffset)
-            --local thunkIATData = ms:readUInt32();
+            local ThunkArrayStream = binstream(self._data, self._size, thunkRVAOffset, true)
 
             -- Read individual Import names or ordinals
             while (true) do
-                -- the thunkPtr is an RVA pointing to the beginning
-                -- of an array of 
-                local ThunkDataRVA = false;
-                local pos = ThunkArrayStream:tell();
+                local ThunkDataRVA = 0ULL;
                 if self.isPE32Plus then
                         --print("PE32Plus")
                         ThunkDataRVA = ThunkArrayStream:readUInt64();
+                        --print("ThunkDataRVA(64): ", ThunkDataRVA)
                 else
-                        ThunkDataRVA = ThunkArrayStream:readUInt32();
+                    ThunkDataRVA = ThunkArrayStream:readUInt32();
+                    --print("ThunkDataRVA(32): ", ThunkDataRVA)
                 end
-                --print("ThunkDataRVA: ", string.format("x%08X", pos), ThunkDataRVA)
+
                 --print(string.format("ThunkDataRVA: 0x%08X (0x%08X)", ThunkDataRVA, self:fileOffsetFromRVA(ThunkDataRVA)))
                 if ThunkDataRVA == 0 then
                     break;
@@ -555,20 +578,19 @@ function peinfo.readDirectory_Import(self)
 
                 local ThunkDataOffset = self:fileOffsetFromRVA(ThunkDataRVA)
 
-                --if band(ThunkDataRVA, IMAGE_ORDINAL_FLAG32) > 0 then
+                --if band(ThunkDataRVA, IMAGE_ORDINAL_FLAG32) ~= 0 then
                 -- Check for Ordinal only import
                 -- must be mindful of 32/64-bit
                 if (false) then
                         print("** IMPORT ORDINAL!! **")
                 else
                     -- Read the entries in the nametable
-                    local HintNameStream = binstream(self._data, self._size, 0, true);
-                    HintNameStream:seek(ThunkDataOffset)
+                    local HintNameStream = binstream(self._data, self._size, ThunkDataOffset, true);
 
                     local hint = HintNameStream:readUInt16();
                     local actualName = HintNameStream:readString();
 
-                    --print(string.format("\t0x%04x %s", hint, actualName))
+                    print(string.format("\t0x%04x %s", hint, actualName))
                     table.insert(self.Imports[res.DllName], actualName);
                 end
             end
@@ -578,33 +600,43 @@ function peinfo.readDirectory_Import(self)
     return res;
 end
 
+-- Read the resource directory
+    -- Reading the resource hierarchy is recursive
+    -- so , we define a function that will be called
+    -- recursively to traverse the entire hierarchy
+    -- Each time through, we keep track of the level, in case
+    -- we want to do something with that information.
+
 function peinfo.readDirectory_Resource(self)
-    -- lookup resource directory entry
+    -- lookup the entry for the resource directory
     local dirTable = self.PEHeader.Directories.ResourceTable
     if not dirTable then 
         return false, "ResourceTable directory not found" 
     end
     
-    -- Get associated section
+    -- find the associated section
     local resourcedirectoryOffset = self:fileOffsetFromRVA(dirTable.VirtualAddress)
-    --local bs = binstream(self._data, self._size, resourcedirectoryOffset, true)
     local bs = self.SourceStream:range(dirTable.Size, resourcedirectoryOffset)
-    local function readResourceDirectory(bs, id)
-        local res = {
-            id = id;
-            Characteristics = bs:readUInt32();          -- 0
-            TimeDateStamp = bs:readUInt32();            -- 4
-            MajorVersion = bs:readUInt16();             -- 8
-            MinorVersion = bs:readUInt16();             -- 10
-            NumberOfNamedEntries = bs:readUInt16();     -- 12
-            NumberOfIdEntries = bs:readUInt16();        -- 14, 16
-        }
+
+
+    local function readResourceDirectory(bs, res, tab, level)
+        level = level or 0
+        res = res or {}
+        --print(tab, "-- READ RESOURCE DIRECTORY")
+
+            res.isDirectory = true;
+            res.Characteristics = bs:readUInt32();          -- 0
+            res.TimeDateStamp = bs:readUInt32();            -- 4
+            res.MajorVersion = bs:readUInt16();             -- 8
+            res.MinorVersion = bs:readUInt16();             -- 10
+            res.NumberOfNamedEntries = bs:readUInt16();     -- 12
+            res.NumberOfIdEntries = bs:readUInt16();        -- 14, 16
+
 
         res.Entries = {}
 
         local cnt = 0;
-        while (cnt < res.NumberOfNamedEntries) do
-
+        while (cnt < res.NumberOfNamedEntries + res.NumberOfIdEntries) do
             local entry = {
                 first = bs:readUInt32();
                 second = bs:readUInt32();
@@ -613,24 +645,66 @@ function peinfo.readDirectory_Resource(self)
             cnt = cnt + 1;
         end
 
-        cnt = 0;
-        while (cnt < res.NumberOfIdEntries) do
-            local entry = {
-                first = bs:readUInt32();
-                second = bs:readUInt32();
-            }
-            table.insert(res.Entries, entry)
-            cnt = cnt + 1;
+
+        -- Now that we have all the entries (IMAGE_RESOURCE_DIRECTORY_ENTRY)
+        -- go through them and perform a specific action for each based on what it is
+        for i, entry in ipairs(res.Entries) do
+            --print(tab, "ENTRY")
+            --local newentry = {}
+            -- check to see if it's a string or an ID
+            if band(entry.first, 0x80000000) ~= 0 then
+                --print(tab, " STRING")
+                -- bits 0-30 are an RVA to a UNICODE string
+                entry.Name = band(entry.first, 0x7fffffff)
+                -- get RVA offset
+                -- local unilen = readUInt16();
+                -- readString(unilen)
+                -- convert unicode to ASCII
+            else
+                --print(tab, "  ID: ", string.format("0x%x", entry.first))
+                entry.ID = entry.first;
+            end
+
+            -- entry.second determines whether we're going after
+            -- a leaf node, or just another directory
+            --print(tab, "  SECOND: ", string.format("0x%x", entry.second), band(entry.second, 0x80000000))
+            if band(entry.second, 0x80000000) ~= 0 then
+                --print(tab, "  DIRECTORY")
+                local offset = band(entry.second, 0x7fffffff)
+                -- pointer to another image directory
+                bs:seek(offset)
+                readResourceDirectory(bs, entry, tab.."    ", level+1)
+            else
+                --print(tab, "  LEAF: ", entry.second)
+                -- we finally have actual data, so read the data entry
+                -- entry.second is an offset from start of root directory
+                -- seek to the offset, and start reading
+                bs:seek(entry.second)
+
+                entry.isData = true;
+                entry.DataRVA = bs:readUInt32();
+                entry.Size = bs:readUInt32();
+                entry.CodePage = bs:readUInt32();
+                entry.Reserved = bs:readUInt32();
+
+--[[
+                print(tab, "    DataRVA: ", string.format("0x%08X", entry.DataRVA));
+                print(tab, "       Size: ",entry.Size);
+                print(tab, "  Code Page: ", entry.CodePage);
+                print(tab, "   Reserved: ", entry.Reserved);
+--]]
+                -- The DataRVA points to the actual data
+                -- it is supposed to be an offset from the start
+                -- of the resource stream
+                bs:seek(entry.DataRVA)
+                entry.Data = bs:readBytes(entry.Size)
+            end
         end
 
         return res;
     end
 
-    self.Resources = readResourceDirectory(bs);
-
-
-
-
+    self.Resources = readResourceDirectory(bs, {}, "", 1);
 end
 
 

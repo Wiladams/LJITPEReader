@@ -154,15 +154,41 @@ local function printResources(info)
 		return false;
 	end
 
-	print("Characteristics: ", info.Resources.Characteristics);
-	print("Time Date Stamp: ", info.Resources.TimeDateStamp);
-	print("Version: ", info.Resources.MajorVersion, info.Resources.MinorVersion);
-	print("Named Entries: ", info.Resources.NumberOfNamedEntries);
-	print("Id Entries: ", info.Resources.NumberOfIdEntries);
-	print("== Entries ==")
-	for i, entry in ipairs(info.Resources.Entries) do
-		print(string.format("0x%x, 0x%x", entry.first, entry.second))
+	local function printDebug(level, ...)
+		local cnt = 0;
+		while cnt < level do
+			io.write('    ')
+			cnt = cnt + 1;
+		end
+		print(...)
 	end
+
+	local function printDirectory(subdir, level)
+		level = level or 0
+		printDebug(level, "SUBDIRECTORY")
+		printDebug(level, "   Is Directory: ", subdir.isDirectory)
+		printDebug(level, "Characteristics: ", subdir.Characteristics);
+		printDebug(level, "Time Date Stamp: ", subdir.TimeDateStamp);
+		printDebug(level, "        Version: ", subdir.MajorVersion, info.Resources.MinorVersion);
+		printDebug(level, "  Named Entries: ", subdir.NumberOfNamedEntries);
+		printDebug(level, "     Id Entries: ", subdir.NumberOfIdEntries);
+		printDebug(level, "  == Entries ==")
+		if subdir.Entries then
+			--print("  NUM Entries: ", #subdir.Entries)
+			for i, entry in ipairs(subdir.Entries) do 
+				if entry.isDirectory then
+					printDirectory(entry, level+1);
+				elseif entry.isData then
+				printDebug(level, "    DataRVA: ", string.format("0x%08X", entry.DataRVA));
+				printDebug(level, "       Size: ",entry.Size);
+				printDebug(level, "  Code Page: ", entry.CodePage);
+				printDebug(level, "   Reserved: ", entry.Reserved);
+				end
+			end
+		end
+	end
+
+	printDirectory(info.Resources)
 end
 
 
@@ -172,9 +198,7 @@ local function main()
 		print("Error trying to map: ", filename)
 	end
 
-	local data = ffi.cast("uint8_t *", mfile:getPointer());
-
-	local info, err = peinfo:fromData(data, mfile.size);
+	local info, err = peinfo:fromData(mfile:getPointer(), mfile.size);
 	if not info then
 		print("ERROR: fromData - ", err)
 		return
