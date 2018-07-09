@@ -120,12 +120,14 @@ You can position the binstream at the location you desire, and go from there as 
 
 **Chronology**
 6 July 2018
+
 - Cleanup and refactoring in peinfo
 - Improve error handling in binstream
 - Add print_utils, with printHex() function
 - Improve detection of Export forward reference by checking section characteristics
 
 1 July 2018
+
 - Correctly parse imports for 32 and 64-bit images
 - Correctly parse export names only, no ordinal or address tables
 - Put internal module name into parser 'ModuleName' field
@@ -133,7 +135,21 @@ You can position the binstream at the location you desire, and go from there as 
 **References**
 Parsing Portable Executable (PE) file formats is pretty esoteric stuff.  The documentation is usually in the form of code, rather than voluminous documentation.  PE file format actually has documentation from Microsoft, and has at least a couple of decades of actual usage.  Even so, there is plenty of documentation that is out of date, wrong, incomplete, etc.  The links provided below form part of the picture, and are still accessible as of July 2018.  Be aware that some documentation was written before 64-bit systems were a thing.  That's the biggest gotcha when reading through the various documents.  When it comes to the PE 'magic', if you don't see mention of 'PE 32 Plus", you know you're dealing with 32-bit documentation, and you'll want to consider that, and make sure you reference the current Microsoft documentation.
 
-* [Microsoft Documentation]https://msdn.microsoft.com/library/windows/desktop/ms680547(v=vs.85).aspx
+Microsoft Documentation
+
+* https://msdn.microsoft.com/library/windows/desktop/ms680547(v=vs.85).aspx
 * https://msdn.microsoft.com/en-us/library/ms809762.aspx
-* [Ancient Wisdom] http://net.pku.edu.cn/~course/cs201/2003/mirrorWebster.cs.ucr.edu/Page_TechDocs/pe.txt
-* [Tutorial]http://www.sunshine2k.de/reversing/tuts/tut_rvait.htm
+
+Other Stuff
+
+* http://net.pku.edu.cn/~course/cs201/2003/mirrorWebster.cs.ucr.edu/Page_TechDocs/pe.txt
+* http://www.sunshine2k.de/reversing/tuts/tut_rvait.htm
+* http://www.osdever.net/documents/PECOFF.pdf
+* http://www.pelib.com/resources/kath.txt
+* https://resources.infosecinstitute.com/complete-tour-of-pe-and-elf-part-1/#article
+
+Pretty Pictures
+
+http://www.openrce.org/reference_library/files/reference/PE%20Format.pdf
+
+
