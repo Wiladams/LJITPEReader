@@ -317,7 +317,7 @@ end
 
 
 function peinfo.readDirectory_Export(self)
-    print("==== readDirectory_Export ====")
+    --print("==== readDirectory_Export ====")
     local dirTable = self.PEHeader.Directories.ExportTable
     if not dirTable then 
         print("NO EXPORT TABLE")
@@ -370,7 +370,7 @@ function peinfo.readDirectory_Export(self)
         --print("Module Name: ", res.ModuleName)
     end 
 
----[[
+--[[
     print("        Export Flags: ", string.format("0x%08X", res.Characteristics))
     print("               nName: ", string.format("0x%08X",res.nName))
     print("         Module Name: ", self.ModuleName)
@@ -389,7 +389,7 @@ function peinfo.readDirectory_Export(self)
         local EATOffset = self:fileOffsetFromRVA(res.AddressOfFunctions);
         local EATStream = binstream(self._data, self._size, EATOffset, true);
 
-        print("EATOffset: ", string.format("0x%08X", EATOffset))
+        --print("EATOffset: ", string.format("0x%08X", EATOffset))
 
         -- Get array of function pointers
         -- EATable represents a '0' based array of these function RVAs
@@ -467,8 +467,7 @@ function peinfo.readDirectory_Export(self)
         end
     end
 
-    -- Maybe a third one that shows only the functions that are exported by ordinal
-    -- Those are functions that are not pointed to by any name
+    -- Last list, functions exported by ordinal only
     local function nameByIndex(index)
         for i, entry in ipairs(self.Export.NamedFunctions) do
             if entry.index == index then
@@ -491,7 +490,7 @@ end
 local IMAGE_ORDINAL_FLAG32 = 0x80000000
 
 function peinfo.readDirectory_Import(self)
-    print("==== readDirectory_Import ====")
+    --print("==== readDirectory_Import ====")
     self.Imports = {}
     local dirTable = self.PEHeader.Directories.ImportTable
     if not dirTable then return false end
@@ -544,7 +543,7 @@ function peinfo.readDirectory_Import(self)
             local ns = binstream(self._data, self._size, Name1Offset, true)
 
             res.DllName = ns:readString();
-            print("DllName: ", res.DllName)
+            --print("DllName: ", res.DllName)
             self.Imports[res.DllName] = {};
         end 
 
