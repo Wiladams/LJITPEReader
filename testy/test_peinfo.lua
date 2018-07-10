@@ -136,6 +136,18 @@ local function printExports(reader)
 		return ;
 	end
 
+	local res = reader.Export
+	---[[
+    print("        Export Flags: ", string.format("0x%08X", res.Characteristics))
+    print("               nName: ", string.format("0x%08X",res.nName))
+    print("         Module Name: ", res.ModuleName)
+    print("        Ordinal Base: ", res.nBase)
+    print("   NumberOfFunctions: ", res.NumberOfFunctions);
+    print("       NumberOfNames: ", res.NumberOfNames);
+    print("  AddressOfFunctions: ", string.format("0x%08X",res.AddressOfFunctions));
+    print("      AddressOfNames: ", string.format("0x%08X",res.AddressOfNames));
+    print("AddressOfNameOrdinals: ", string.format("0x%08X", res.AddressOfNameOrdinals));
+--]]
 	print("Module Name: ", reader.ModuleName)
 	print(" = All Functions =")
 	for k,v in pairs(reader.Export.AllFunctions) do

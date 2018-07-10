@@ -324,8 +324,6 @@ function peinfo.readDirectory_Export(self)
         return false 
     end
 
-    self.Export = {}
-
     -- If the virtual address is zero, then we don't actually
     -- have any exports
     if dirTable.VirtualAddress == 0 then
@@ -345,19 +343,20 @@ function peinfo.readDirectory_Export(self)
     -- We are now in position to read the actual export table data
     -- The data consists of various bits and pieces of information, including
     -- pointers to the actual export information.
-    local res = dirTable;
-        dirTable.Characteristics = ms:readUInt32();
-        dirTable.TimeDateStamp = ms:readUInt32();
-        dirTable.MajorVersion = ms:readUInt16();
-        dirTable.MinorVersion = ms:readUInt16();
-        dirTable.nName = ms:readUInt32();                -- Relative to image base
-        dirTable.nBase = ms:readUInt32();
-        dirTable.NumberOfFunctions = ms:readUInt32();
-        dirTable.NumberOfNames = ms:readUInt32();
-        dirTable.AddressOfFunctions = ms:readUInt32();
-        dirTable.AddressOfNames = ms:readUInt32();
-        dirTable.AddressOfNameOrdinals = ms:readUInt32();
-
+    self.Export = {    
+        Characteristics = ms:readUInt32();
+        TimeDateStamp = ms:readUInt32();
+        MajorVersion = ms:readUInt16();
+        MinorVersion = ms:readUInt16();
+        nName = ms:readUInt32();                -- Relative to image base
+        nBase = ms:readUInt32();
+        NumberOfFunctions = ms:readUInt32();
+        NumberOfNames = ms:readUInt32();
+        AddressOfFunctions = ms:readUInt32();
+        AddressOfNames = ms:readUInt32();
+        AddressOfNameOrdinals = ms:readUInt32();
+    }
+    local res = self.Export;
 
     -- Get the internal name of the module
     local nNameOffset = self:fileOffsetFromRVA(res.nName)
@@ -366,21 +365,11 @@ function peinfo.readDirectory_Export(self)
         -- upset the positioning on the one that's reading
         -- the import descriptors
         local ns = binstream(self._data, self._size, nNameOffset, true)
-        self.ModuleName = ns:readString();
+        self.Export.ModuleName = ns:readString();
+        self.ModuleName = self.Export.ModuleName;
+
         --print("Module Name: ", res.ModuleName)
     end 
-
---[[
-    print("        Export Flags: ", string.format("0x%08X", res.Characteristics))
-    print("               nName: ", string.format("0x%08X",res.nName))
-    print("         Module Name: ", self.ModuleName)
-    print("        Ordinal Base: ", res.nBase)
-    print("   NumberOfFunctions: ", res.NumberOfFunctions);
-    print("       NumberOfNames: ", res.NumberOfNames);
-    print("  AddressOfFunctions: ", string.format("0x%08X",res.AddressOfFunctions));
-    print("      AddressOfNames: ", string.format("0x%08X",res.AddressOfNames));
-    print("AddressOfNameOrdinals: ", string.format("0x%08X", res.AddressOfNameOrdinals));
---]]
 
     -- Get the function pointers
     --local EATable = {}  -- ffi.new("uint32_t[?]", res.NumberOfFunctions)
@@ -457,7 +446,7 @@ function peinfo.readDirectory_Export(self)
 
             local name = nameStream:readString();
             local hint = EOTStream:readUInt16();
-            local ordinal = hint + dirTable.nBase;
+            local ordinal = hint + res.nBase;
             local index = hint;
             --local funcptr = self.Export.AllFunctions[ordinal];
             local funcptr = self.Export.AllFunctions[index];
