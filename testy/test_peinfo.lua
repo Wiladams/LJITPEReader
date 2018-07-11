@@ -1,6 +1,7 @@
 package.path = package.path..";../?.lua"
 
 local ffi = require("ffi")
+local bit = require("bit")
 
 local enum = require("pereader.enum")
 local peinfo = require("pereader.peinfo")
@@ -137,7 +138,7 @@ local function printExports(reader)
 	end
 
 	local res = reader.Export
-	---[[
+
     print("        Export Flags: ", string.format("0x%08X", res.Characteristics))
     print("               nName: ", string.format("0x%08X",res.nName))
     print("         Module Name: ", res.ModuleName)
@@ -147,8 +148,7 @@ local function printExports(reader)
     print("  AddressOfFunctions: ", string.format("0x%08X",res.AddressOfFunctions));
     print("      AddressOfNames: ", string.format("0x%08X",res.AddressOfNames));
     print("AddressOfNameOrdinals: ", string.format("0x%08X", res.AddressOfNameOrdinals));
---]]
-	print("Module Name: ", reader.ModuleName)
+
 	print(" = All Functions =")
 	for k,v in pairs(reader.Export.AllFunctions) do
 		if tonumber(v) then
