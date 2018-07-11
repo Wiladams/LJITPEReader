@@ -141,12 +141,6 @@ function peinfo.readDOSHeader(self)
         e_lfanew = ms:readUInt32();             -- File address of new exe header
     }
 
---[[
-    print("---- parseData ----")
-    print("  DOS Header Ends: ", ms:tell());
-    print(" PE Header Begins: ", string.format("0x%x", DOSHeader.e_lfanew))
-    print("    DOS Body size: ", DOSBodySize)
---]]
 
     return res;
 end
@@ -165,8 +159,6 @@ function peinfo.readCOFF(self)
         SizeOfOptionalHeader = ms:readUInt16();
         Characteristics = ms:readUInt16();
     }
-
-    --print("readCOFF, SizeOfOptionalHeader: ", res.SizeOfOptionalHeader)
 
     return res;
 end
